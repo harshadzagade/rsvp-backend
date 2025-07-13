@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       Int      @id @default(autoincrement())
+  name     String
+  email    String   @unique
+  password String
+  role     Role     @default(VIEWER)
+  institute  String?
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  SUPERADMIN
+  VIEWER
+}
+
+model Event {
+  id         Int      @id @default(autoincrement())
+  title      String
+  slug       String   @unique
+  date       DateTime
+  venue      String
+  fee        Int
+  formFields Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  rsvps      RSVP[]
+}
+
+model RSVP {
+  id         Int      @id @default(autoincrement())
+  eventId    Int
+  fullName   String
+  email      String
+  mobile     String
+  formData   Json
+  txnid      String   @unique
+  status     String   @default("initiated")
+  createdAt  DateTime @default(now())
+  event      Event    @relation(fields: [eventId], references: [id])
+  payment    Payment?
+}
+
+model Payment {
+  id           Int      @id @default(autoincrement())
+  txnid        String   @unique
+  amount       Int
+  status       String
+  payuResponse Json
+  createdAt    DateTime @default(now())
+  rsvp         RSVP     @relation(fields: [txnid], references: [txnid])
+}

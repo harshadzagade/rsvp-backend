@@ -1,0 +1,161 @@
+const { PrismaClient } = require('@prisma/client');
+const crypto = require('crypto');
+const { generateTxnId, generatePayUForm } = require('../utils/payu');
+const { sendThankYouEmail, sendFailureEmail } = require('../utils/email');
+
+const prisma = new PrismaClient();
+
+const PAYU_KEY = process.env.PAYU_KEY;
+const PAYU_SALT = process.env.PAYU_SALT;
+
+// Hash verification
+function verifyPayUHash({ key, txnid, amount, productinfo, firstname, email, status, salt, receivedHash }) {
+  const hashSequence = `${salt}|${status}|||||||||||${email}|${firstname}|${productinfo}|${amount}|${txnid}|${key}`;
+  const calculatedHash = crypto.createHash('sha512').update(hashSequence).digest('hex');
+  return calculatedHash === receivedHash;
+}
+
+exports.registerRSVP = async (req, res) => {
+  try {
+    const { eventId, fullName, email, mobile, formData } = req.body;
+
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+
+    const txnid = generateTxnId();
+    const amount = event.fee;
+
+    const rsvp = await prisma.rSVP.create({
+      data: {
+        eventId,
+        fullName,
+        email,
+        mobile,
+        txnid,
+        formData
+      }
+    });
+
+    const formHtml = generatePayUForm({
+      key: PAYU_KEY,
+      salt: PAYU_SALT,
+      txnid,
+      amount,
+      firstname: fullName,
+      email,
+      mobile,
+      productinfo: event.title,
+      success_url: `http://localhost:5350/api/rsvp/success`,
+      failure_url: `http://localhost:5350/api/rsvp/failure`
+    });
+
+    res.send(formHtml);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'RSVP registration failed' });
+  }
+};
+
+exports.handlePayUSuccess = async (req, res) => {
+  try {
+    const {
+      txnid,
+      status,
+      amount,
+      email,
+      firstname,
+      productinfo,
+      hash
+    } = req.body;
+
+    const isValid = verifyPayUHash({
+      key: process.env.PAYU_KEY,
+      salt: process.env.PAYU_SALT,
+      txnid,
+      amount,
+      productinfo,
+      firstname,
+      email,
+      status,
+      receivedHash: hash
+    });
+
+    if (!isValid) {
+      return res.status(400).send('Hash mismatch. Potential fraud.');
+    }
+
+    // Update RSVP and Payment
+    await prisma.rSVP.update({
+      where: { txnid },
+      data: { status: 'success' }
+    });
+
+    await prisma.payment.create({
+      data: {
+        txnid,
+        amount: parseInt(amount),
+        status,
+        payuResponse: req.body
+      }
+    });
+
+    await sendThankYouEmail({
+      to: email,
+      name: firstname,
+      eventTitle: productinfo,
+      amount,
+      txnid
+    });
+
+
+    res.redirect('http://localhost:5173/thank-you');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+exports.handlePayUFailure = async (req, res) => {
+  try {
+    const {
+      txnid,
+      status,
+      amount
+    } = req.body;
+
+    await prisma.rSVP.update({
+      where: { txnid },
+      data: { status: 'failed' }
+    });
+
+    await prisma.payment.create({
+      data: {
+        txnid,
+        amount: parseInt(amount),
+        status,
+        payuResponse: req.body
+      }
+    });
+
+    const rsvp = await prisma.rSVP.findUnique({
+      where: { txnid },
+      include: { event: true }
+    });
+
+
+    if (rsvp) {
+      await sendFailureEmail({
+        to: rsvp.email,
+        name: rsvp.fullName,
+        eventTitle: rsvp.event?.title || 'Event'
+      });
+    }
+
+
+    res.redirect('http://localhost:5173/payment-failed?error=declined');
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
