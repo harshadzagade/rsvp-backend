@@ -14,7 +14,7 @@ function generatePayUHash({ key, salt, txnid, amount, productinfo, firstname, em
 function generatePayUForm({
   key, salt, txnid, amount, firstname, email, mobile, productinfo, success_url, failure_url
 }) {
-  const hash = generatePayUHash({ key, salt, txnid, amount, productinfo, firstname, email, mobile });
+  const hash = generatePayUHash({ key, salt, txnid, amount, productinfo, firstname, email });
 
   return `
     <html>

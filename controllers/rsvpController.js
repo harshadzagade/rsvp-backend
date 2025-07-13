@@ -2,6 +2,8 @@ const { PrismaClient } = require('@prisma/client');
 const crypto = require('crypto');
 const { generateTxnId, generatePayUForm } = require('../utils/payu');
 const { sendThankYouEmail, sendFailureEmail } = require('../utils/email');
+const { logPayment } = require('../utils/logger');
+
 
 const prisma = new PrismaClient();
 
@@ -80,6 +82,8 @@ exports.handlePayUSuccess = async (req, res) => {
       receivedHash: hash
     });
 
+
+
     if (!isValid) {
       return res.status(400).send('Hash mismatch. Potential fraud.');
     }
@@ -98,6 +102,23 @@ exports.handlePayUSuccess = async (req, res) => {
         payuResponse: req.body
       }
     });
+
+    // ✅ 3. LOG PAYMENT SUCCESS HERE
+    const { logPayment } = require('../utils/logger');
+    logPayment({
+      status: 'success',
+      txnid,
+      amount,
+      user: {
+        name: firstname,
+        email
+      },
+      eventTitle: productinfo,
+      gatewayStatus: status,
+      timestamp: new Date().toISOString(),
+      raw: req.body
+    });
+
 
     await sendThankYouEmail({
       to: email,
@@ -147,11 +168,26 @@ exports.handlePayUFailure = async (req, res) => {
       }
     });
 
+
     const rsvp = await prisma.rSVP.findUnique({
       where: { txnid },
       include: { event: true }
     });
 
+    logPayment({
+      status: 'failed',
+      txnid,
+      amount,
+      user: {
+        name: rsvp?.fullName,
+        email: rsvp?.email
+      },
+      eventTitle: rsvp?.event?.title,
+      reason: 'Payment gateway marked as failed',
+      gatewayStatus: status,
+      timestamp: new Date().toISOString(),
+      raw: req.body
+    });
 
     if (rsvp) {
       await sendFailureEmail({
