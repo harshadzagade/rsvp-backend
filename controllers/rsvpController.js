@@ -10,6 +10,8 @@ const prisma = new PrismaClient();
 const PAYU_KEY = process.env.PAYU_KEY;
 const PAYU_SALT = process.env.PAYU_SALT;
 
+const BASE_URL = process.env.BASE_URL;
+
 // Hash verification
 function verifyPayUHash({ key, txnid, amount, productinfo, firstname, email, status, salt, receivedHash }) {
   const hashSequence = `${salt}|${status}|||||||||||${email}|${firstname}|${productinfo}|${amount}|${txnid}|${key}`;
@@ -47,8 +49,8 @@ exports.registerRSVP = async (req, res) => {
       email,
       mobile,
       productinfo: event.title,
-      success_url: `http://localhost:5350/api/rsvp/success`,
-      failure_url: `http://localhost:5350/api/rsvp/failure`
+      success_url: `${BASE_URL}/api/rsvp/success`,
+      failure_url: `${BASE_URL}/api/rsvp/failure`
     });
 
     res.send(formHtml);
@@ -129,12 +131,12 @@ exports.handlePayUSuccess = async (req, res) => {
     });
 
 
-    res.redirect('http://localhost:5173/thank-you');
+    res.redirect(`${BASE_URL}/thank-you`);
 
     // ✅ Optional fallback: HTML-based redirect
     res.send(`
       <html>
-        <head><meta http-equiv="refresh" content="0; URL='http://localhost:5173/thank-you'" /></head>
+        <head><meta http-equiv="refresh" content="0; URL='${BASE_URL}/thank-you'" /></head>
         <body>Redirecting to confirmation page...</body>
       </html>
     `);
@@ -198,12 +200,13 @@ exports.handlePayUFailure = async (req, res) => {
     }
 
 
-    res.redirect('http://localhost:5173/payment-failed');
+    res.redirect(`${BASE_URL}/payment-failed`);
+
 
     // ✅ Optional fallback: HTML
     res.send(`
       <html>
-        <head><meta http-equiv="refresh" content="0; URL='http://localhost:5173/payment-failed'" /></head>
+        <head><meta http-equiv="refresh" content="0; URL='${BASE_URL}/payment-failed'" /></head>
         <body>Redirecting to failure page...</body>
       </html>
     `);
