@@ -109,6 +109,16 @@ exports.handlePayUSuccess = async (req, res) => {
 
 
     res.redirect('http://localhost:5173/thank-you');
+
+    // ✅ Optional fallback: HTML-based redirect
+    res.send(`
+      <html>
+        <head><meta http-equiv="refresh" content="0; URL='http://localhost:5173/thank-you'" /></head>
+        <body>Redirecting to confirmation page...</body>
+      </html>
+    `);
+
+
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -152,7 +162,15 @@ exports.handlePayUFailure = async (req, res) => {
     }
 
 
-    res.redirect('http://localhost:5173/payment-failed?error=declined');
+    res.redirect('http://localhost:5173/payment-failed');
+
+    // ✅ Optional fallback: HTML
+    res.send(`
+      <html>
+        <head><meta http-equiv="refresh" content="0; URL='http://localhost:5173/payment-failed'" /></head>
+        <body>Redirecting to failure page...</body>
+      </html>
+    `);
 
   } catch (err) {
     console.error(err);
