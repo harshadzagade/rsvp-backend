@@ -18,7 +18,7 @@
     const mailOptions = {
       from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
       to,
-      cc: ADMIN_EMAILS,
+      cc: ADMIN_EMAILS || [ 'anirudham_ics@met.edu' , 'manojkumarp_iit@met.edu' , 'harshadz_ics@met.edu' ],
       subject: `✅ Payment Confirmed: ${eventTitle}`,
       html: `
         <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
@@ -43,7 +43,6 @@
 
           <p style="margin-top: 30px;">Warm regards,<br>
           <strong>MUMBAI EDUCATIONAL TRUST</strong><br>
-          <a href="mailto:${process.env.ADMIN_EMAIL}" style="color: #D32F2F;">${process.env.ADMIN_EMAIL}</a></p>
         </div>
       `
     };
@@ -56,7 +55,7 @@
     const mailOptions = {
       from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
       to,
-      cc: ADMIN_EMAILS,
+      cc: ADMIN_EMAILS || [ 'anirudham_ics@met.edu' , 'manojkumarp_iit@met.edu' , 'harshadz_ics@met.edu' ],
       subject: `❌ Payment Failed: ${eventTitle}`,
       html: `
         <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
@@ -69,7 +68,6 @@
 
           <p style="margin-top: 30px;">Warm regards,<br>
           <strong>MUMBAI EDUCATIONAL TRUST</strong><br>
-          <a href="mailto:${process.env.ADMIN_EMAIL}" style="color: #D32F2F;">${process.env.ADMIN_EMAIL}</a></p>
         </div>
       `
     };
