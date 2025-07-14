@@ -134,12 +134,12 @@ exports.handlePayUSuccess = async (req, res) => {
     res.redirect(`${BASE_URL}/thank-you`);
 
     // ✅ Optional fallback: HTML-based redirect
-    res.send(`
-      <html>
-        <head><meta http-equiv="refresh" content="0; URL='${BASE_URL}/thank-you'" /></head>
-        <body>Redirecting to confirmation page...</body>
-      </html>
-    `);
+    // res.send(`
+    //   <html>
+    //     <head><meta http-equiv="refresh" content="0; URL='${BASE_URL}/thank-you'" /></head>
+    //     <body>Redirecting to confirmation page...</body>
+    //   </html>
+    // `);
 
 
   } catch (err) {
@@ -200,16 +200,16 @@ exports.handlePayUFailure = async (req, res) => {
     }
 
 
-    res.redirect(`${BASE_URL}/payment-failed`);
+    res.redirect(`${BASE_URL}/payment-failed?error=declined`);
 
 
     // ✅ Optional fallback: HTML
-    res.send(`
-      <html>
-        <head><meta http-equiv="refresh" content="0; URL='${BASE_URL}/payment-failed'" /></head>
-        <body>Redirecting to failure page...</body>
-      </html>
-    `);
+    // res.send(`
+    //   <html>
+    //     <head><meta http-equiv="refresh" content="0; URL='${BASE_URL}/payment-failed'" /></head>
+    //     <body>Redirecting to failure page...</body>
+    //   </html>
+    // `);
 
   } catch (err) {
     console.error(err);
