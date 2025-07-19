@@ -27,7 +27,27 @@ exports.registerRSVP = async (req, res) => {
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     const txnid = generateTxnId();
-    const amount = event.fee;
+    let amount = event.fee; // fallback
+    let matchedCurrency = 'INR';
+
+    const options = event.feeOptions?.options || [];
+
+    for (const rule of options) {
+      const logic = rule.logic || 'AND';
+      const conditions = rule.conditions || [];
+
+      const matches = conditions.map(cond => {
+        return (formData[cond.field] || '').toLowerCase() === (cond.value || '').toLowerCase();
+      });
+
+      const isMatch = logic === 'AND' ? matches.every(Boolean) : matches.some(Boolean);
+
+      if (isMatch) {
+        amount = rule.fee;
+        matchedCurrency = rule.currency || 'INR';
+        break;
+      }
+    }
 
     const rsvp = await prisma.rSVP.create({
       data: {

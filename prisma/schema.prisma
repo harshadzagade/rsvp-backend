@@ -29,13 +29,15 @@ model Event {
   slug       String   @unique
   date       DateTime
   venue      String
-  fee        Int
+  fee        Int      // Default flat fee (required)
+  feeOptions Json?    // 👈 Optional multiple-fee structure
   formFields Json
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   rsvps      RSVP[]
 }
+
 
 model RSVP {
   id         Int      @id @default(autoincrement())

@@ -3,9 +3,44 @@ const prisma = new PrismaClient();
 
 exports.createEvent = async (req, res) => {
   try {
-    const { title, slug, date, venue, fee, formFields } = req.body;
+    const { title, slug, date, venue, fee, feeOptions, formFields } = req.body;
+
+    if (feeOptions) {
+      if (!Array.isArray(feeOptions.options)) {
+        return res.status(400).json({ error: "feeOptions.options must be an array" });
+      }
+
+      for (let i = 0; i < feeOptions.options.length; i++) {
+        const option = feeOptions.options[i];
+
+        if (typeof option.fee !== 'number') {
+          return res.status(400).json({ error: `feeOptions.options[${i}].fee must be a number` });
+        }
+
+        if (option.conditions && !Array.isArray(option.conditions)) {
+          return res.status(400).json({ error: `feeOptions.options[${i}].conditions must be an array` });
+        }
+
+        if (option.conditions) {
+          for (let j = 0; j < option.conditions.length; j++) {
+            const cond = option.conditions[j];
+            if (
+              typeof cond !== 'object' ||
+              !cond.field ||
+              typeof cond.field !== 'string' ||
+              typeof cond.value !== 'string'
+            ) {
+              return res.status(400).json({
+                error: `feeOptions.options[${i}].conditions[${j}] must be an object with 'field' and 'value' strings`
+              });
+            }
+          }
+        }
+      }
+    }
+
     const event = await prisma.event.create({
-      data: { title, slug, date: new Date(date), venue, fee, formFields }
+      data: { title, slug, date: new Date(date), venue, fee, feeOptions, formFields }
     });
     res.json(event);
   } catch (err) {
