@@ -10,7 +10,7 @@ const app = express();
 const prisma = new PrismaClient();
 
 app.use(cors({
-  origin: 'http://fdp.met.edu',
+  origin: 'http://events.met.edu',
   credentials: true
 }));
 app.use(express.json());
