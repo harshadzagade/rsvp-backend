@@ -19,7 +19,7 @@
       from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
       to,
       cc: ADMIN_EMAILS || [ 'anirudham_ics@met.edu' , 'manojkumarp_iit@met.edu' , 'harshadz_ics@met.edu' ],
-      subject: `✅ Payment Confirmed: ${eventTitle}`,
+      subject: `${isFree ? '✅ Registration Confirmed' : '✅ Payment Confirmed'}: ${eventTitle}`,
       html: `
         <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
           <h2 style="color: #D32F2F;">Thank You for Registering!</h2>
@@ -30,8 +30,8 @@
 
           <table style="margin: 20px 0; border-collapse: collapse;">
             <tr>
-              <td style="padding: 8px 12px; font-weight: bold;">Amount Paid:</td>
-              <td style="padding: 8px 12px;">₹${amount}</td>
+              <td style="padding: 8px 12px; font-weight: bold;">Amount ${isFree ? '' : 'Paid'}:</td>
+            <td style="padding: 8px 12px;">${isFree ? 'Free Registration' : `₹${amount}`}</td>
             </tr>
             <tr>
               <td style="padding: 8px 12px; font-weight: bold;">Transaction ID:</td>

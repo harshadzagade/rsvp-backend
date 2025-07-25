@@ -60,6 +60,34 @@ exports.registerRSVP = async (req, res) => {
       }
     });
 
+    // 🆕 ✅ Handle FREE event registration (fee === 0)
+    if (amount === 0) {
+      await prisma.rSVP.update({
+        where: { txnid },
+        data: { status: 'success' }
+      });
+
+      await prisma.payment.create({
+        data: {
+          txnid,
+          amount: 0,
+          status: 'free',
+          payuResponse: {}
+        }
+      });
+
+      await sendThankYouEmail({
+        to: email,
+        name: fullName,
+        eventTitle: event.title,
+        amount: 0,
+        txnid
+      });
+
+      return res.redirect(`${BASE_URL}/thank-you?free=true`);
+    }
+
+
     const formHtml = generatePayUForm({
       key: PAYU_KEY,
       salt: PAYU_SALT,
