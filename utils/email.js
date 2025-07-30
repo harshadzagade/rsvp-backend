@@ -1,26 +1,30 @@
-  const nodemailer = require('nodemailer');
+const nodemailer = require('nodemailer');
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: false, // use TLS
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: false, // use TLS
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
 
-  const ADMIN_EMAILS = process.env.ADMIN_EMAILS
+const ADMIN_EMAILS = process.env.ADMIN_EMAILS
   ? process.env.ADMIN_EMAILS.split(',').map(email => email.trim())
   : [];
 
-  async function sendThankYouEmail({ to, name, eventTitle, amount, txnid }) {
-    const mailOptions = {
-      from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
-      to,
-      cc: ADMIN_EMAILS || [ 'anirudham_ics@met.edu' , 'manojkumarp_iit@met.edu' , 'harshadz_ics@met.edu' ],
-      subject: `${isFree ? '✅ Registration Confirmed' : '✅ Payment Confirmed'}: ${eventTitle}`,
-      html: `
+async function sendThankYouEmail({ to, name, eventTitle, amount, txnid }) {
+  const isFree = !amount || Number(amount) === 0;
+  const mailOptions = {
+    from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
+    to,
+    cc: ADMIN_EMAILS.length > 0
+      ? ADMIN_EMAILS
+      : ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu', 'conference_imm@met.edu'],
+
+    subject: `${isFree ? '✅ Registration Confirmed' : '✅ Payment Confirmed'}: ${eventTitle}`,
+    html: `
         <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
           <h2 style="color: #D32F2F;">Thank You for Registering!</h2>
           <p>Dear <strong>${name}</strong>,</p>
@@ -45,19 +49,22 @@
           <strong>MUMBAI EDUCATIONAL TRUST</strong><br>
         </div>
       `
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
-  }
+  await transporter.sendMail(mailOptions);
+}
 
 
-  async function sendFailureEmail({ to, name, eventTitle }) {
-    const mailOptions = {
-      from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
-      to,
-      cc: ADMIN_EMAILS || [ 'anirudham_ics@met.edu' , 'manojkumarp_iit@met.edu' , 'harshadz_ics@met.edu' ],
-      subject: `❌ Payment Failed: ${eventTitle}`,
-      html: `
+async function sendFailureEmail({ to, name, eventTitle }) {
+  const mailOptions = {
+    from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
+    to,
+    cc: ADMIN_EMAILS.length > 0
+      ? ADMIN_EMAILS
+      : ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu', 'conference_imm@met.edu'],
+
+    subject: `❌ Payment Failed: ${eventTitle}`,
+    html: `
         <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
           <h2 style="color: #D32F2F;">Payment Failed</h2>
           <p>Dear <strong>${name}</strong>,</p>
@@ -70,9 +77,9 @@
           <strong>MUMBAI EDUCATIONAL TRUST</strong><br>
         </div>
       `
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
-  }
+  await transporter.sendMail(mailOptions);
+}
 
-  module.exports = { sendThankYouEmail, sendFailureEmail };
+module.exports = { sendThankYouEmail, sendFailureEmail };
