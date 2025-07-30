@@ -14,7 +14,7 @@ const ADMIN_EMAILS = process.env.ADMIN_EMAILS
   ? process.env.ADMIN_EMAILS.split(',').map(email => email.trim())
   : [];
 
-async function sendThankYouEmail({ to, name, eventTitle, amount, txnid, matchedRule }) {
+async function sendThankYouEmail({ to, name, eventTitle, amount, txnid }) {
   const isFree = !amount || Number(amount) === 0;
   const mailOptions = {
     from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
@@ -30,16 +30,6 @@ async function sendThankYouEmail({ to, name, eventTitle, amount, txnid, matchedR
 
           <p>We are pleased to confirm your successful registration for:</p>
           <h3 style="color: #1976D2;">${eventTitle}</h3>
-
-          ${matchedRule ? `
-            <p><strong>Selection:</strong></p>
-            <ul style="margin: 0 0 16px 16px; padding: 0;">
-              ${matchedRule.conditions.map(cond => `
-                <li>${cond.field}: ${cond.value}</li>
-              `).join('')}
-            </ul>
-            ` : ''
-          }
 
           <table style="margin: 20px 0; border-collapse: collapse;">
             <tr>
