@@ -5,6 +5,7 @@ node_modules/
 
 # log folder
 logs/
+transaction.log
 
 
 # .env file
