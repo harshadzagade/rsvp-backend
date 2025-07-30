@@ -29,6 +29,7 @@ exports.registerRSVP = async (req, res) => {
     const txnid = generateTxnId();
     let amount = event.fee; // fallback
     let matchedCurrency = 'INR';
+    let matchedRule = null;
 
     const options = event.feeOptions?.options || [];
 
@@ -45,6 +46,7 @@ exports.registerRSVP = async (req, res) => {
       if (isMatch) {
         amount = rule.fee;
         matchedCurrency = rule.currency || 'INR';
+        matchedRule = rule; // ✅ Capture matched rule here
         break;
       }
     }
@@ -81,7 +83,8 @@ exports.registerRSVP = async (req, res) => {
         name: fullName,
         eventTitle: event.title,
         amount: 0,
-        txnid
+        txnid,
+        matchedRule
       });
 
       return res.redirect(`${BASE_URL}/thank-you?free=true`);
@@ -175,7 +178,8 @@ exports.handlePayUSuccess = async (req, res) => {
       name: firstname,
       eventTitle: productinfo,
       amount,
-      txnid
+      txnid,
+      matchedRule
     });
 
 

@@ -14,14 +14,13 @@ const ADMIN_EMAILS = process.env.ADMIN_EMAILS
   ? process.env.ADMIN_EMAILS.split(',').map(email => email.trim())
   : [];
 
-async function sendThankYouEmail({ to, name, eventTitle, amount, txnid }) {
+async function sendThankYouEmail({ to, name, eventTitle, amount, txnid, matchedRule }) {
   const isFree = !amount || Number(amount) === 0;
   const mailOptions = {
     from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
     to,
-    cc: ADMIN_EMAILS.length > 0
-      ? ADMIN_EMAILS
-      : ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu', 'conference_imm@met.edu'],
+    cc: ADMIN_EMAILS,
+    bcc: ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu'],
 
     subject: `${isFree ? '✅ Registration Confirmed' : '✅ Payment Confirmed'}: ${eventTitle}`,
     html: `
@@ -31,6 +30,16 @@ async function sendThankYouEmail({ to, name, eventTitle, amount, txnid }) {
 
           <p>We are pleased to confirm your successful registration for:</p>
           <h3 style="color: #1976D2;">${eventTitle}</h3>
+
+          ${matchedRule ? `
+            <p><strong>Selection:</strong></p>
+            <ul style="margin: 0 0 16px 16px; padding: 0;">
+              ${matchedRule.conditions.map(cond => `
+                <li>${cond.field}: ${cond.value}</li>
+              `).join('')}
+            </ul>
+            ` : ''
+          }
 
           <table style="margin: 20px 0; border-collapse: collapse;">
             <tr>
@@ -59,9 +68,8 @@ async function sendFailureEmail({ to, name, eventTitle }) {
   const mailOptions = {
     from: `"Institute Of Mass Media" <${process.env.EMAIL_USER}>`,
     to,
-    cc: ADMIN_EMAILS.length > 0
-      ? ADMIN_EMAILS
-      : ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu', 'conference_imm@met.edu'],
+    cc: ADMIN_EMAILS,
+    bcc: ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu'],
 
     subject: `❌ Payment Failed: ${eventTitle}`,
     html: `
