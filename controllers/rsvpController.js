@@ -30,6 +30,15 @@ function sendBrowserRedirect(res, destination) {
   `);
 }
 
+async function runEmailTasks(tasks) {
+  const results = await Promise.allSettled(tasks);
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.error('Email task failed:', result.reason);
+    }
+  });
+}
+
 exports.registerRSVP = async (req, res) => {
   try {
     const { eventId, fullName, email, mobile, formData } = req.body;
@@ -91,26 +100,27 @@ exports.registerRSVP = async (req, res) => {
         },
       });
 
-      await sendThankYouEmail({
-        to: email,
-        name: fullName,
-        eventTitle: event.title,
-        eventDate: event.date,
-        venue: event.venue,
-        amount: 0,
-        txnid,
-        formData: normalizedFormData,
-      });
-
-      await sendAdminNotificationEmail({
-        eventTitle: event.title,
-        eventDate: event.date,
-        venue: event.venue,
-        amount: 0,
-        txnid,
-        formData: normalizedFormData,
-        status: 'registered',
-      });
+      await runEmailTasks([
+        sendThankYouEmail({
+          to: email,
+          name: fullName,
+          eventTitle: event.title,
+          eventDate: event.date,
+          venue: event.venue,
+          amount: 0,
+          txnid,
+          formData: normalizedFormData,
+        }),
+        sendAdminNotificationEmail({
+          eventTitle: event.title,
+          eventDate: event.date,
+          venue: event.venue,
+          amount: 0,
+          txnid,
+          formData: normalizedFormData,
+          status: 'registered',
+        }),
+      ]);
 
       return sendBrowserRedirect(res, `${BASE_URL}/thank-you?free=true`);
     }
@@ -188,26 +198,31 @@ exports.handlePayUSuccess = async (req, res) => {
       include: { event: true },
     });
 
-    await sendThankYouEmail({
-      to: email,
-      name: firstname,
-      eventTitle: productinfo,
-      eventDate: rsvp?.event?.date,
-      venue: rsvp?.event?.venue,
-      amount,
-      txnid,
-      formData: rsvp?.formData || {},
-    });
+    const recipientEmail = rsvp?.email || email;
+    const recipientName = rsvp?.fullName || firstname;
+    const savedFormData = rsvp?.formData || {};
 
-    await sendAdminNotificationEmail({
-      eventTitle: productinfo,
-      eventDate: rsvp?.event?.date,
-      venue: rsvp?.event?.venue,
-      amount,
-      txnid,
-      formData: rsvp?.formData || {},
-      status: 'success',
-    });
+    await runEmailTasks([
+      sendThankYouEmail({
+        to: recipientEmail,
+        name: recipientName,
+        eventTitle: productinfo,
+        eventDate: rsvp?.event?.date,
+        venue: rsvp?.event?.venue,
+        amount,
+        txnid,
+        formData: savedFormData,
+      }),
+      sendAdminNotificationEmail({
+        eventTitle: productinfo,
+        eventDate: rsvp?.event?.date,
+        venue: rsvp?.event?.venue,
+        amount,
+        txnid,
+        formData: savedFormData,
+        status: 'success',
+      }),
+    ]);
 
     return sendBrowserRedirect(res, `${BASE_URL}/thank-you`);
   } catch (err) {
@@ -260,24 +275,25 @@ exports.handlePayUFailure = async (req, res) => {
         txnid,
       };
 
-      await sendFailureEmail({
-        to: rsvp.email,
-        name: rsvp.fullName,
-        eventTitle: rsvp.event?.title || 'Event',
-        eventDate: rsvp.event?.date,
-        venue: rsvp.event?.venue,
-        formData: failureFormData,
-      });
-
-      await sendAdminNotificationEmail({
-        eventTitle: rsvp.event?.title || 'Event',
-        eventDate: rsvp.event?.date,
-        venue: rsvp.event?.venue,
-        amount,
-        txnid,
-        formData: failureFormData,
-        status: 'failed',
-      });
+      await runEmailTasks([
+        sendFailureEmail({
+          to: rsvp.email,
+          name: rsvp.fullName,
+          eventTitle: rsvp.event?.title || 'Event',
+          eventDate: rsvp.event?.date,
+          venue: rsvp.event?.venue,
+          formData: failureFormData,
+        }),
+        sendAdminNotificationEmail({
+          eventTitle: rsvp.event?.title || 'Event',
+          eventDate: rsvp.event?.date,
+          venue: rsvp.event?.venue,
+          amount,
+          txnid,
+          formData: failureFormData,
+          status: 'failed',
+        }),
+      ]);
     }
 
     return sendBrowserRedirect(res, `${BASE_URL}/payment-failed?error=declined`);
