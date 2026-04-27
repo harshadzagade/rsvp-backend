@@ -39,6 +39,23 @@ async function runEmailTasks(tasks) {
   });
 }
 
+async function upsertPayment({ txnid, amount, status, payuResponse }) {
+  return prisma.payment.upsert({
+    where: { txnid },
+    update: {
+      amount,
+      status,
+      payuResponse,
+    },
+    create: {
+      txnid,
+      amount,
+      status,
+      payuResponse,
+    },
+  });
+}
+
 exports.registerRSVP = async (req, res) => {
   try {
     const { eventId, fullName, email, mobile, formData } = req.body;
@@ -91,13 +108,11 @@ exports.registerRSVP = async (req, res) => {
         data: { status: 'success' },
       });
 
-      await prisma.payment.create({
-        data: {
-          txnid,
-          amount: 0,
-          status: 'free',
-          payuResponse: {},
-        },
+      await upsertPayment({
+        txnid,
+        amount: 0,
+        status: 'free',
+        payuResponse: {},
       });
 
       await runEmailTasks([
@@ -170,13 +185,11 @@ exports.handlePayUSuccess = async (req, res) => {
       data: { status: 'success' },
     });
 
-    await prisma.payment.create({
-      data: {
-        txnid,
-        amount: parseInt(amount),
-        status,
-        payuResponse: req.body,
-      },
+    await upsertPayment({
+      txnid,
+      amount: parseInt(amount),
+      status,
+      payuResponse: req.body,
     });
 
     logPayment({
@@ -240,13 +253,11 @@ exports.handlePayUFailure = async (req, res) => {
       data: { status: 'failed' },
     });
 
-    await prisma.payment.create({
-      data: {
-        txnid,
-        amount: parseInt(amount),
-        status,
-        payuResponse: req.body,
-      },
+    await upsertPayment({
+      txnid,
+      amount: parseInt(amount),
+      status,
+      payuResponse: req.body,
     });
 
     const rsvp = await prisma.rSVP.findUnique({
