@@ -4,14 +4,24 @@ const cors = require('cors');
 const rsvpRoutes = require('./routes/rsvpRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const adminRoutes = require('./routes/adminRoutes');
-const { PrismaClient } = require('@prisma/client');
 
 const app = express();
-const prisma = new PrismaClient();
+
+const allowedOrigins = [
+  'https://events.met.edu',
+  'http://events.met.edu',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
 
 app.use(cors({
-  origin: 'http://events.met.edu',
-  credentials: true
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -1,22 +1,33 @@
 const { PrismaClient } = require('@prisma/client');
 const crypto = require('crypto');
 const { generateTxnId, generatePayUForm } = require('../utils/payu');
-const { sendThankYouEmail, sendFailureEmail } = require('../utils/email');
+const { sendThankYouEmail, sendFailureEmail, sendAdminNotificationEmail } = require('../utils/email');
 const { logPayment } = require('../utils/logger');
-
 
 const prisma = new PrismaClient();
 
 const PAYU_KEY = process.env.PAYU_KEY;
 const PAYU_SALT = process.env.PAYU_SALT;
-
 const BASE_URL = process.env.BASE_URL;
 
-// Hash verification
 function verifyPayUHash({ key, txnid, amount, productinfo, firstname, email, status, salt, receivedHash }) {
   const hashSequence = `${salt}|${status}|||||||||||${email}|${firstname}|${productinfo}|${amount}|${txnid}|${key}`;
   const calculatedHash = crypto.createHash('sha512').update(hashSequence).digest('hex');
   return calculatedHash === receivedHash;
+}
+
+function sendBrowserRedirect(res, destination) {
+  return res.send(`
+    <html>
+      <head>
+        <meta http-equiv="refresh" content="0; URL='${destination}'" />
+        <script>window.location.replace(${JSON.stringify(destination)});</script>
+      </head>
+      <body style="font-family: Arial, sans-serif; padding: 24px;">
+        Redirecting to <a href="${destination}">${destination}</a>...
+      </body>
+    </html>
+  `);
 }
 
 exports.registerRSVP = async (req, res) => {
@@ -27,8 +38,14 @@ exports.registerRSVP = async (req, res) => {
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     const txnid = generateTxnId();
-    let amount = event.fee; // fallback
-    let matchedCurrency = 'INR';
+    let amount = event.fee;
+
+    const normalizedFormData = {
+      ...formData,
+      fullName,
+      email,
+      mobile,
+    };
 
     const options = event.feeOptions?.options || [];
 
@@ -36,35 +53,33 @@ exports.registerRSVP = async (req, res) => {
       const logic = rule.logic || 'AND';
       const conditions = rule.conditions || [];
 
-      const matches = conditions.map(cond => {
-        return (formData[cond.field] || '').toLowerCase() === (cond.value || '').toLowerCase();
+      const matches = conditions.map((cond) => {
+        return (normalizedFormData[cond.field] || '').toLowerCase() === (cond.value || '').toLowerCase();
       });
 
       const isMatch = logic === 'AND' ? matches.every(Boolean) : matches.some(Boolean);
 
       if (isMatch) {
         amount = rule.fee;
-        matchedCurrency = rule.currency || 'INR';
         break;
       }
     }
 
-    const rsvp = await prisma.rSVP.create({
+    await prisma.rSVP.create({
       data: {
         eventId,
         fullName,
         email,
         mobile,
         txnid,
-        formData
-      }
+        formData: normalizedFormData,
+      },
     });
 
-    // 🆕 ✅ Handle FREE event registration (fee === 0)
     if (amount === 0) {
       await prisma.rSVP.update({
         where: { txnid },
-        data: { status: 'success' }
+        data: { status: 'success' },
       });
 
       await prisma.payment.create({
@@ -72,21 +87,33 @@ exports.registerRSVP = async (req, res) => {
           txnid,
           amount: 0,
           status: 'free',
-          payuResponse: {}
-        }
+          payuResponse: {},
+        },
       });
 
       await sendThankYouEmail({
         to: email,
         name: fullName,
         eventTitle: event.title,
+        eventDate: event.date,
+        venue: event.venue,
         amount: 0,
-        txnid
+        txnid,
+        formData: normalizedFormData,
       });
 
-      return res.redirect(`${BASE_URL}/thank-you?free=true`);
-    }
+      await sendAdminNotificationEmail({
+        eventTitle: event.title,
+        eventDate: event.date,
+        venue: event.venue,
+        amount: 0,
+        txnid,
+        formData: normalizedFormData,
+        status: 'registered',
+      });
 
+      return sendBrowserRedirect(res, `${BASE_URL}/thank-you?free=true`);
+    }
 
     const formHtml = generatePayUForm({
       key: PAYU_KEY,
@@ -98,7 +125,7 @@ exports.registerRSVP = async (req, res) => {
       mobile,
       productinfo: event.title,
       success_url: `${BASE_URL}/api/rsvp/success`,
-      failure_url: `${BASE_URL}/api/rsvp/failure`
+      failure_url: `${BASE_URL}/api/rsvp/failure`,
     });
 
     res.send(formHtml);
@@ -110,15 +137,7 @@ exports.registerRSVP = async (req, res) => {
 
 exports.handlePayUSuccess = async (req, res) => {
   try {
-    const {
-      txnid,
-      status,
-      amount,
-      email,
-      firstname,
-      productinfo,
-      hash
-    } = req.body;
+    const { txnid, status, amount, email, firstname, productinfo, hash } = req.body;
 
     const isValid = verifyPayUHash({
       key: process.env.PAYU_KEY,
@@ -129,19 +148,16 @@ exports.handlePayUSuccess = async (req, res) => {
       firstname,
       email,
       status,
-      receivedHash: hash
+      receivedHash: hash,
     });
-
-
 
     if (!isValid) {
       return res.status(400).send('Hash mismatch. Potential fraud.');
     }
 
-    // Update RSVP and Payment
     await prisma.rSVP.update({
       where: { txnid },
-      data: { status: 'success' }
+      data: { status: 'success' },
     });
 
     await prisma.payment.create({
@@ -149,47 +165,51 @@ exports.handlePayUSuccess = async (req, res) => {
         txnid,
         amount: parseInt(amount),
         status,
-        payuResponse: req.body
-      }
+        payuResponse: req.body,
+      },
     });
 
-    // ✅ 3. LOG PAYMENT SUCCESS HERE
-    const { logPayment } = require('../utils/logger');
     logPayment({
       status: 'success',
       txnid,
       amount,
       user: {
         name: firstname,
-        email
+        email,
       },
       eventTitle: productinfo,
       gatewayStatus: status,
       timestamp: new Date().toISOString(),
-      raw: req.body
+      raw: req.body,
     });
 
+    const rsvp = await prisma.rSVP.findUnique({
+      where: { txnid },
+      include: { event: true },
+    });
 
     await sendThankYouEmail({
       to: email,
       name: firstname,
       eventTitle: productinfo,
+      eventDate: rsvp?.event?.date,
+      venue: rsvp?.event?.venue,
       amount,
-      txnid
+      txnid,
+      formData: rsvp?.formData || {},
     });
 
+    await sendAdminNotificationEmail({
+      eventTitle: productinfo,
+      eventDate: rsvp?.event?.date,
+      venue: rsvp?.event?.venue,
+      amount,
+      txnid,
+      formData: rsvp?.formData || {},
+      status: 'success',
+    });
 
-    res.redirect(`${BASE_URL}/thank-you`);
-
-    // ✅ Optional fallback: HTML-based redirect
-    // res.send(`
-    //   <html>
-    //     <head><meta http-equiv="refresh" content="0; URL='${BASE_URL}/thank-you'" /></head>
-    //     <body>Redirecting to confirmation page...</body>
-    //   </html>
-    // `);
-
-
+    return sendBrowserRedirect(res, `${BASE_URL}/thank-you`);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -198,15 +218,11 @@ exports.handlePayUSuccess = async (req, res) => {
 
 exports.handlePayUFailure = async (req, res) => {
   try {
-    const {
-      txnid,
-      status,
-      amount
-    } = req.body;
+    const { txnid, status, amount } = req.body;
 
     await prisma.rSVP.update({
       where: { txnid },
-      data: { status: 'failed' }
+      data: { status: 'failed' },
     });
 
     await prisma.payment.create({
@@ -214,14 +230,13 @@ exports.handlePayUFailure = async (req, res) => {
         txnid,
         amount: parseInt(amount),
         status,
-        payuResponse: req.body
-      }
+        payuResponse: req.body,
+      },
     });
-
 
     const rsvp = await prisma.rSVP.findUnique({
       where: { txnid },
-      include: { event: true }
+      include: { event: true },
     });
 
     logPayment({
@@ -230,35 +245,42 @@ exports.handlePayUFailure = async (req, res) => {
       amount,
       user: {
         name: rsvp?.fullName,
-        email: rsvp?.email
+        email: rsvp?.email,
       },
       eventTitle: rsvp?.event?.title,
       reason: 'Payment gateway marked as failed',
       gatewayStatus: status,
       timestamp: new Date().toISOString(),
-      raw: req.body
+      raw: req.body,
     });
 
     if (rsvp) {
+      const failureFormData = {
+        ...rsvp.formData,
+        txnid,
+      };
+
       await sendFailureEmail({
         to: rsvp.email,
         name: rsvp.fullName,
-        eventTitle: rsvp.event?.title || 'Event'
+        eventTitle: rsvp.event?.title || 'Event',
+        eventDate: rsvp.event?.date,
+        venue: rsvp.event?.venue,
+        formData: failureFormData,
+      });
+
+      await sendAdminNotificationEmail({
+        eventTitle: rsvp.event?.title || 'Event',
+        eventDate: rsvp.event?.date,
+        venue: rsvp.event?.venue,
+        amount,
+        txnid,
+        formData: failureFormData,
+        status: 'failed',
       });
     }
 
-
-    res.redirect(`${BASE_URL}/payment-failed?error=declined`);
-
-
-    // ✅ Optional fallback: HTML
-    // res.send(`
-    //   <html>
-    //     <head><meta http-equiv="refresh" content="0; URL='${BASE_URL}/payment-failed'" /></head>
-    //     <body>Redirecting to failure page...</body>
-    //   </html>
-    // `);
-
+    return sendBrowserRedirect(res, `${BASE_URL}/payment-failed?error=declined`);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
