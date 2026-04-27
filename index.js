@@ -12,14 +12,38 @@ const allowedOrigins = [
   'http://events.met.edu',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'https://secure.payu.in',
+  'https://test.payu.in',
 ];
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+
+  if (allowedOrigins.includes(origin)) return true;
+
+  try {
+    const { hostname } = new URL(origin);
+    return (
+      hostname === 'events.met.edu' ||
+      hostname.endsWith('.met.edu') ||
+      hostname === 'secure.payu.in' ||
+      hostname === 'test.payu.in' ||
+      hostname.endsWith('.payu.in') ||
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1'
+    );
+  } catch {
+    return false;
+  }
+}
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
-    return callback(new Error('Not allowed by CORS'));
+    console.error('Blocked by CORS:', origin);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
 }));
