@@ -20,7 +20,7 @@ const ADMIN_EMAILS = [
 const INTERNAL_AUDIT_EMAILS = ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu'];
 
 const formatDate = (value) => {
-  if (!value) return '9 May 2026';
+  if (!value) return '26 - 27 June 2026';
   return new Date(value).toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'long',
@@ -30,10 +30,10 @@ const formatDate = (value) => {
 
 const buildProgrammeSummary = ({ eventTitle, eventDate, venue }) => `
   <div style="margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa;">
-    <h3 style="margin: 0 0 12px; color: #111827;">Programme Details</h3>
-    <p style="margin: 6px 0;"><strong>Programme:</strong> ${eventTitle}</p>
+    <h3 style="margin: 0 0 12px; color: #111827;">Conference Details</h3>
+    <p style="margin: 6px 0;"><strong>Conference:</strong> ${eventTitle}</p>
     <p style="margin: 6px 0;"><strong>Date:</strong> ${formatDate(eventDate)}</p>
-    <p style="margin: 6px 0;"><strong>Venue:</strong> ${venue || 'MET Institute of PGDM'}</p>
+    <p style="margin: 6px 0;"><strong>Venue:</strong> ${venue || 'MET Institute of Computer Science'}</p>
   </div>
 `;
 
@@ -68,8 +68,11 @@ const buildParticipantSummary = ({ formData = {}, amount, txnid, statusLabel }) 
 async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amount, txnid, formData = {} }) {
   const isFree = !amount || Number(amount) === 0;
   const mode = formData.participationMode || 'Selected mode';
+
+  const conferenceName = "International Conference on Emerging Technologies in Computing, Intelligent Systems, and Management (ICETCISM2026)";
+
   const mailOptions = {
-    from: `"MET Institute of PGDM" <${process.env.EMAIL_USER}>`,
+    from: `"MET Institute of Computer Science" <${process.env.EMAIL_USER}>`,
     to,
     cc: ADMIN_EMAILS,
     bcc: INTERNAL_AUDIT_EMAILS,
@@ -79,8 +82,8 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
         <h2 style="color: #B91C1C;">Registration Confirmation</h2>
         <p>Dear <strong>${name}</strong>,</p>
         <p>
-          This is to confirm your registration for the MDP programme by Institution of PGDM on
-          <strong> "Prevention of Sexual Harassment at Workplace: Training for Corporates and Academic Institutions"</strong>.
+          Thank you for registering for the <strong>${conferenceName}</strong>. 
+          We have successfully received your details and payment.
         </p>
         ${buildProgrammeSummary({ eventTitle, eventDate, venue })}
         ${buildParticipantSummary({
@@ -89,10 +92,10 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
           txnid,
           statusLabel: isFree ? 'Registered' : `Paid (${mode})`,
         })}
-        <p>
-          We look forward to your participation. Please keep this email for your reference. The certificate will be prepared using the name submitted in the registration form.
+        <p> 
+          We look forward to seeing you in Mumbai!
         </p>
-        <p style="margin-top: 30px;">Warm regards,<br><strong>MET Institute of PGDM</strong></p>
+        <p style="margin-top: 30px;">Warm regards,<br><strong>MET Institute of Computer Science</strong></p>
       </div>
     `,
   };
@@ -101,8 +104,9 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
 }
 
 async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formData = {} }) {
+  const conferenceName = "International Conference on Emerging Technologies in Computing, Intelligent Systems, and Management (ICETCISM2026)";
   const mailOptions = {
-    from: `"MET Institute of PGDM" <${process.env.EMAIL_USER}>`,
+    from: `"MET Institute of Computer Science" <${process.env.EMAIL_USER}>`,
     to,
     cc: ADMIN_EMAILS,
     bcc: INTERNAL_AUDIT_EMAILS,
@@ -112,7 +116,7 @@ async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formDa
         <h2 style="color: #B91C1C;">Payment Incomplete</h2>
         <p>Dear <strong>${name}</strong>,</p>
         <p>
-          We received your registration request for the MDP programme on <strong>${formatDate(eventDate)}</strong>, but the payment was not completed successfully.
+          We received your registration request for <strong>${conferenceName}</strong>, but the payment was not completed successfully.
         </p>
         ${buildProgrammeSummary({ eventTitle, eventDate, venue })}
         ${buildParticipantSummary({
@@ -124,7 +128,7 @@ async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formDa
         <p>
           You can try again by revisiting the registration page. If you need assistance, please contact the programme team.
         </p>
-        <p style="margin-top: 30px;">Warm regards,<br><strong>MET Institute of PGDM</strong></p>
+        <p style="margin-top: 30px;">Warm regards,<br><strong>MET Institute of Computer Science</strong></p>
       </div>
     `,
   };
@@ -134,17 +138,17 @@ async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formDa
 
 async function sendAdminNotificationEmail({ eventTitle, eventDate, venue, amount, txnid, formData = {}, status }) {
   if (!ADMIN_EMAILS.length) return;
-
+  const conferenceName = "ICETCISM2026";
   const subjectPrefix = status === 'success' ? 'New Paid Registration' : status === 'failed' ? 'Payment Failed Registration' : 'New Registration';
   const mailOptions = {
-    from: `"MET Institute of PGDM" <${process.env.EMAIL_USER}>`,
+    from: `"MET Institute of Computer Science" <${process.env.EMAIL_USER}>`,
     to: ADMIN_EMAILS,
     bcc: INTERNAL_AUDIT_EMAILS,
     subject: `${subjectPrefix}: ${eventTitle}`,
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
         <h2 style="color: #111827;">Admin Registration Alert</h2>
-        <p>A registration update has been recorded for the PGDM programme.</p>
+        <p>A registration update has been recorded for the ${conferenceName} programme.</p>
         ${buildProgrammeSummary({ eventTitle, eventDate, venue })}
         ${buildParticipantSummary({
           formData,

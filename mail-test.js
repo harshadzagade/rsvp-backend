@@ -19,7 +19,7 @@ async function main() {
   console.log('SMTP verify passed');
 
   const info = await transporter.sendMail({
-    from: `"MET Institute of PGDM" <${process.env.EMAIL_USER}>`,
+    from: `"MET Institute of Computer Science" <${process.env.EMAIL_USER}>`,
     to: process.env.ADMIN_EMAIL,
     subject: 'SMTP test from RSVP backend',
     text: 'This is a test email from the RSVP backend.',
