@@ -36,8 +36,60 @@ function generatePayUForm({
   `;
 }
 
+function generateVerifyPaymentHash({ key, salt, txnid }) {
+  const hashString = `${key}|verify_payment|${txnid}|${salt}`;
+  return crypto.createHash('sha512').update(hashString).digest('hex');
+}
+
+function getVerifyPaymentUrl() {
+  if (process.env.PAYU_VERIFY_URL) return process.env.PAYU_VERIFY_URL;
+
+  if ((process.env.PAYU_BASE_URL || '').includes('secure.payu.in')) {
+    return 'https://info.payu.in/merchant/postservice.php?form=2';
+  }
+
+  return 'https://test.payu.in/merchant/postservice.php?form=2';
+}
+
+async function verifyPaymentWithPayU({ key, salt, txnid }) {
+  const hash = generateVerifyPaymentHash({ key, salt, txnid });
+  const payload = new URLSearchParams({
+    key,
+    command: 'verify_payment',
+    var1: txnid,
+    hash,
+  });
+
+  const response = await fetch(getVerifyPaymentUrl(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: payload.toString(),
+  });
+
+  const text = await response.text();
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Unable to parse PayU verify_payment response: ${text}`);
+  }
+
+  const txnDetails = data?.transaction_details?.[txnid] || data?.result?.[0] || data?.result?.[txnid] || null;
+  const verifiedStatus = txnDetails?.status || txnDetails?.unmappedstatus || data?.status || null;
+
+  return {
+    raw: data,
+    txnDetails,
+    verifiedStatus: String(verifiedStatus || '').toLowerCase(),
+  };
+}
+
 module.exports = {
   generateTxnId,
   generatePayUHash,
-  generatePayUForm
+  generatePayUForm,
+  verifyPaymentWithPayU,
 };
