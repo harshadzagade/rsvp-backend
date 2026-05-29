@@ -30,12 +30,11 @@ function verifyPayUHash({
   const reverseHashParts = [
     salt,
     status,
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
+    '', // udf10
+    '', // udf9
+    '', // udf8
+    '', // udf7
+    '', // udf6
     udf5,
     udf4,
     udf3,
