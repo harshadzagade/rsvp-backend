@@ -97,7 +97,15 @@ async function upsertPayment({ txnid, amount, status, payuResponse }) {
 
 exports.registerRSVP = async (req, res) => {
   try {
-    const { eventId, fullName, email, mobile, formData } = req.body;
+    const { eventId, formData } = req.body;
+    let fullName = req.body.fullName || '';
+    let email = req.body.email || '';
+    let mobile = req.body.mobile || '';
+
+    // Case-insensitive fallbacks for existing events with capitalized form keys
+    if (!fullName) fullName = formData?.fullName || formData?.FullName || formData?.Name || formData?.name || '';
+    if (!email) email = formData?.email || formData?.Email || '';
+    if (!mobile) mobile = formData?.mobile || formData?.Mobile || formData?.['WhatsApp Number'] || formData?.['Contact Number'] || formData?.['Contact number'] || '';
 
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) return res.status(404).json({ error: 'Event not found' });
@@ -315,8 +323,8 @@ exports.handlePayUSuccess = async (req, res) => {
       raw: req.body,
     });
 
-    const recipientEmail = rsvp?.email || email;
-    const recipientName = rsvp?.fullName || firstname;
+    const recipientEmail = rsvp?.email || email || rsvp?.formData?.email || rsvp?.formData?.Email || '';
+    const recipientName = rsvp?.fullName || firstname || rsvp?.formData?.fullName || rsvp?.formData?.FullName || rsvp?.formData?.name || rsvp?.formData?.Name || '';
     const savedFormData = rsvp?.formData || {};
 
     await runEmailTasks([
@@ -393,10 +401,13 @@ exports.handlePayUFailure = async (req, res) => {
         raw: req.body,
       });
 
+      const failEmail = rsvp.email || rsvp.formData?.email || rsvp.formData?.Email || '';
+      const failName = rsvp.fullName || rsvp.formData?.fullName || rsvp.formData?.FullName || rsvp.formData?.name || rsvp.formData?.Name || '';
+
       await runEmailTasks([
         sendFailureEmail({
-          to: rsvp.email,
-          name: rsvp.fullName,
+          to: failEmail,
+          name: failName,
           eventTitle: rsvp.event?.title || 'Event',
           eventDate: rsvp.event?.date,
           venue: rsvp.event?.venue,
