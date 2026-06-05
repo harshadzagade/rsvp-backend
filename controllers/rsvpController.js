@@ -3,11 +3,10 @@ const crypto = require('crypto');
 const { generateTxnId, generatePayUForm, verifyPaymentWithPayU } = require('../utils/payu');
 const { sendThankYouEmail, sendFailureEmail, sendAdminNotificationEmail } = require('../utils/email');
 const { logPayment } = require('../utils/logger');
+const { getCredentialsForEvent } = require('../utils/config');
 
 const prisma = new PrismaClient();
 
-const PAYU_KEY = process.env.PAYU_KEY;
-const PAYU_SALT = process.env.PAYU_SALT;
 const BASE_URL = process.env.BASE_URL;
 
 function verifyPayUHash({
@@ -103,6 +102,23 @@ exports.registerRSVP = async (req, res) => {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
+    const credentials = getCredentialsForEvent(event);
+    if (!credentials) {
+      console.error('RSVP attempted for unconfigured event:', { eventId, slug: event.slug });
+      return res.status(400).send(`
+        <html>
+          <body style="font-family: 'Segoe UI', Arial, sans-serif; text-align: center; padding: 50px; background: #fafafa; color: #333;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e5e7eb;">
+              <h2 style="color: #DC2626; margin-top: 0;">Configuration Error</h2>
+              <p style="font-size: 16px; line-height: 1.5; color: #4B5563;">This event's payment gateway or registration configuration has not been set up yet.</p>
+              <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e5e7eb;" />
+              <p style="font-size: 14px; color: #6B7280;">Please contact the system administrator at <a href="mailto:principal_ics@met.edu" style="color: #2563EB; text-decoration: none;">principal_ics@met.edu</a> for assistance.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+
     const txnid = generateTxnId();
     let amount = event.fee;
 
@@ -165,6 +181,7 @@ exports.registerRSVP = async (req, res) => {
           amount: 0,
           txnid,
           formData: normalizedFormData,
+          credentials,
         }),
         sendAdminNotificationEmail({
           eventTitle: event.title,
@@ -174,6 +191,7 @@ exports.registerRSVP = async (req, res) => {
           txnid,
           formData: normalizedFormData,
           status: 'registered',
+          credentials,
         }),
       ]);
 
@@ -181,8 +199,8 @@ exports.registerRSVP = async (req, res) => {
     }
 
     const formHtml = generatePayUForm({
-      key: PAYU_KEY,
-      salt: PAYU_SALT,
+      key: credentials.key,
+      salt: credentials.salt,
       txnid,
       amount,
       firstname: fullName,
@@ -191,6 +209,7 @@ exports.registerRSVP = async (req, res) => {
       productinfo: event.title,
       success_url: `${BASE_URL}/api/rsvp/success`,
       failure_url: `${BASE_URL}/api/rsvp/failure`,
+      baseUrl: credentials.baseUrl,
     });
 
     res.send(formHtml);
@@ -204,9 +223,22 @@ exports.handlePayUSuccess = async (req, res) => {
   try {
     const { txnid, status, amount, email, firstname, productinfo, hash, key: responseKey } = req.body;
 
+    const rsvp = await prisma.rSVP.findUnique({
+      where: { txnid },
+      include: { event: true },
+    });
+
+    if (!rsvp) {
+      console.error('RSVP transaction not found for success callback', { txnid });
+      return res.status(404).send('Transaction not found.');
+    }
+
+    const event = rsvp.event;
+    const credentials = getCredentialsForEvent(event);
+
     const isValid = verifyPayUHash({
-      key: responseKey,
-      salt: process.env.PAYU_SALT,
+      key: responseKey || credentials.key,
+      salt: credentials.salt,
       txnid,
       amount,
       productinfo,
@@ -222,11 +254,11 @@ exports.handlePayUSuccess = async (req, res) => {
       additionalCharges: req.body.additionalCharges || req.body.additional_charges,
     });
 
-    if (String(responseKey || '') !== String(process.env.PAYU_KEY || '')) {
+    if (String(responseKey || '') !== String(credentials.key || '')) {
       console.error('PayU key mismatch', {
         txnid,
         responseKey,
-        configuredKey: process.env.PAYU_KEY,
+        configuredKey: credentials.key,
       });
       return res.status(400).send('Merchant key mismatch.');
     }
@@ -235,15 +267,16 @@ exports.handlePayUSuccess = async (req, res) => {
       console.error('PayU hash verification failed, attempting verify_payment fallback', {
         txnid,
         responseKey,
-        configuredKey: process.env.PAYU_KEY,
+        configuredKey: credentials.key,
         status,
         amount,
       });
 
       const verification = await verifyPaymentWithPayU({
-        key: process.env.PAYU_KEY,
-        salt: process.env.PAYU_SALT,
+        key: credentials.key,
+        salt: credentials.salt,
         txnid,
+        baseUrl: credentials.baseUrl,
       });
 
       if (verification.verifiedStatus !== 'success') {
@@ -282,11 +315,6 @@ exports.handlePayUSuccess = async (req, res) => {
       raw: req.body,
     });
 
-    const rsvp = await prisma.rSVP.findUnique({
-      where: { txnid },
-      include: { event: true },
-    });
-
     const recipientEmail = rsvp?.email || email;
     const recipientName = rsvp?.fullName || firstname;
     const savedFormData = rsvp?.formData || {};
@@ -301,6 +329,7 @@ exports.handlePayUSuccess = async (req, res) => {
         amount,
         txnid,
         formData: savedFormData,
+        credentials,
       }),
       sendAdminNotificationEmail({
         eventTitle: productinfo,
@@ -310,6 +339,7 @@ exports.handlePayUSuccess = async (req, res) => {
         txnid,
         formData: savedFormData,
         status: 'success',
+        credentials,
       }),
     ]);
 
@@ -341,26 +371,27 @@ exports.handlePayUFailure = async (req, res) => {
       include: { event: true },
     });
 
-    logPayment({
-      status: 'failed',
-      txnid,
-      amount,
-      user: {
-        name: rsvp?.fullName,
-        email: rsvp?.email,
-      },
-      eventTitle: rsvp?.event?.title,
-      reason: 'Payment gateway marked as failed',
-      gatewayStatus: status,
-      timestamp: new Date().toISOString(),
-      raw: req.body,
-    });
-
     if (rsvp) {
+      const credentials = getCredentialsForEvent(rsvp.event);
       const failureFormData = {
         ...rsvp.formData,
         txnid,
       };
+
+      logPayment({
+        status: 'failed',
+        txnid,
+        amount,
+        user: {
+          name: rsvp?.fullName,
+          email: rsvp?.email,
+        },
+        eventTitle: rsvp?.event?.title,
+        reason: 'Payment gateway marked as failed',
+        gatewayStatus: status,
+        timestamp: new Date().toISOString(),
+        raw: req.body,
+      });
 
       await runEmailTasks([
         sendFailureEmail({
@@ -370,6 +401,7 @@ exports.handlePayUFailure = async (req, res) => {
           eventDate: rsvp.event?.date,
           venue: rsvp.event?.venue,
           formData: failureFormData,
+          credentials,
         }),
         sendAdminNotificationEmail({
           eventTitle: rsvp.event?.title || 'Event',
@@ -379,6 +411,7 @@ exports.handlePayUFailure = async (req, res) => {
           txnid,
           formData: failureFormData,
           status: 'failed',
+          credentials,
         }),
       ]);
     }

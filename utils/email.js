@@ -1,14 +1,43 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
+const defaultTransporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
+  port: parseInt(process.env.EMAIL_PORT || '587'),
   secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 });
+
+const transporters = new Map();
+
+function getTransporter(credentials) {
+  const user = credentials?.emailUser;
+  const pass = credentials?.emailPass;
+
+  if (!user || !pass) {
+    return defaultTransporter;
+  }
+
+  const cacheKey = `${user}:${pass}`;
+  if (transporters.has(cacheKey)) {
+    return transporters.get(cacheKey);
+  }
+
+  const dynamicTransporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: false,
+    auth: {
+      user,
+      pass,
+    },
+  });
+
+  transporters.set(cacheKey, dynamicTransporter);
+  return dynamicTransporter;
+}
 
 const ADMIN_EMAILS = [
   ...(process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(',') : []),
@@ -28,26 +57,26 @@ const formatDate = (value) => {
   });
 };
 
-const buildProgrammeSummary = ({ eventTitle, eventDate, venue }) => `
+const buildProgrammeSummary = ({ eventTitle, eventDate, venue, credentials }) => `
   <div style="margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa;">
-    <h3 style="margin: 0 0 12px; color: #111827;">Conference Details</h3>
-    <p style="margin: 6px 0;"><strong>Conference:</strong> ${eventTitle}</p>
+    <h3 style="margin: 0 0 12px; color: #111827;">Programme Details</h3>
+    <p style="margin: 6px 0;"><strong>Programme:</strong> ${eventTitle}</p>
     <p style="margin: 6px 0;"><strong>Date:</strong> ${formatDate(eventDate)}</p>
-    <p style="margin: 6px 0;"><strong>Venue:</strong> ${venue || 'MET Institute of Computer Science'}</p>
+    <p style="margin: 6px 0;"><strong>Venue:</strong> ${venue || credentials?.instituteName || 'MET Institute of Computer Science'}</p>
   </div>
 `;
 
 const buildParticipantSummary = ({ formData = {}, amount, txnid, statusLabel }) => {
   const rows = [
-    ['Name', formData.fullName || formData.name],
-    ['Email', formData.email],
-    ['Mobile', formData.mobile],
-    ['Category', formData.category],
-    ['Participation Mode', formData.participationMode],
-    ['Organisation', formData.organisation],
-    ['Designation', formData.designation],
-    ['Certificate Name', formData.certificateName],
-    ['Joining Reason', formData.joiningReason],
+    ['Name', formData.fullName || formData.FullName || formData.name || ''],
+    ['Email', formData.email || formData.Email || ''],
+    ['Mobile', formData.mobile || formData.Mobile || formData['WhatsApp Number'] || ''],
+    ['Category', formData.category || formData.ParticipationCategory || ''],
+    ['Participation Mode', formData.participationMode || formData.PaymentType || 'Online'],
+    ['Organisation', formData.organisation || formData.instituteName || formData['Name of Institute/College'] || ''],
+    ['Designation', formData.designation || formData.Designation || ''],
+    ['Certificate Name', formData.certificateName || formData.FullName || ''],
+    ['Joining Reason', formData.joiningReason || ''],
     ['Transaction ID', txnid],
     ['Payment Status', statusLabel],
     ['Amount', amount || amount === 0 ? `Rs. ${Number(amount).toLocaleString('en-IN')}` : 'Not completed'],
@@ -65,27 +94,32 @@ const buildParticipantSummary = ({ formData = {}, amount, txnid, statusLabel }) 
   `;
 };
 
-async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amount, txnid, formData = {} }) {
+async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amount, txnid, formData = {}, credentials }) {
   const isFree = !amount || Number(amount) === 0;
-  const mode = formData.participationMode || 'Selected mode';
+  const mode = formData.participationMode || formData.PaymentType || 'Selected mode';
 
-  const conferenceName = "International Conference on Emerging Technologies in Computing, Intelligent Systems, and Management (ICETCISM2026)";
+  const activeTransporter = getTransporter(credentials);
+  const fromEmail = credentials?.emailUser || process.env.EMAIL_USER;
+  const fromName = credentials?.instituteName || "MET Institute of Computer Science";
+  const confName = credentials?.conferenceName || eventTitle || "Conference";
+  
+  const adminList = credentials?.adminEmails || ADMIN_EMAILS;
 
   const mailOptions = {
-    from: `"MET Institute of Computer Science" <${process.env.EMAIL_USER}>`,
+    from: `"${fromName}" <${fromEmail}>`,
     to,
-    cc: ADMIN_EMAILS,
+    cc: adminList,
     bcc: INTERNAL_AUDIT_EMAILS,
-    subject: `${isFree ? 'Registration Confirmed' : 'Payment Confirmed'}: ${eventTitle}`,
+    subject: `${isFree ? 'Registration Confirmed' : 'Payment Confirmed'}: ${confName}`,
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
         <h2 style="color: #B91C1C;">Registration Confirmation</h2>
         <p>Dear <strong>${name}</strong>,</p>
         <p>
-          Thank you for registering for the <strong>${conferenceName}</strong>. 
+          Thank you for registering for the <strong>${confName}</strong>. 
           We have successfully received your details and payment.
         </p>
-        ${buildProgrammeSummary({ eventTitle, eventDate, venue })}
+        ${buildProgrammeSummary({ eventTitle: confName, eventDate, venue, credentials })}
         ${buildParticipantSummary({
           formData,
           amount,
@@ -93,32 +127,38 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
           statusLabel: isFree ? 'Registered' : `Paid (${mode})`,
         })}
         <p> 
-          We look forward to seeing you in Mumbai!
+          We look forward to seeing you!
         </p>
-        <p style="margin-top: 30px;">Warm regards,<br><strong>MET Institute of Computer Science</strong></p>
+        <p style="margin-top: 30px;">Warm regards,<br><strong>${fromName}</strong></p>
       </div>
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  await activeTransporter.sendMail(mailOptions);
 }
 
-async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formData = {} }) {
-  const conferenceName = "International Conference on Emerging Technologies in Computing, Intelligent Systems, and Management (ICETCISM2026)";
+async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formData = {}, credentials }) {
+  const activeTransporter = getTransporter(credentials);
+  const fromEmail = credentials?.emailUser || process.env.EMAIL_USER;
+  const fromName = credentials?.instituteName || "MET Institute of Computer Science";
+  const confName = credentials?.conferenceName || eventTitle || "Conference";
+  
+  const adminList = credentials?.adminEmails || ADMIN_EMAILS;
+
   const mailOptions = {
-    from: `"MET Institute of Computer Science" <${process.env.EMAIL_USER}>`,
+    from: `"${fromName}" <${fromEmail}>`,
     to,
-    cc: ADMIN_EMAILS,
+    cc: adminList,
     bcc: INTERNAL_AUDIT_EMAILS,
-    subject: `Payment Failed: ${eventTitle}`,
+    subject: `Payment Failed: ${confName}`,
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
         <h2 style="color: #B91C1C;">Payment Incomplete</h2>
         <p>Dear <strong>${name}</strong>,</p>
         <p>
-          We received your registration request for <strong>${conferenceName}</strong>, but the payment was not completed successfully.
+          We received your registration request for <strong>${confName}</strong>, but the payment was not completed successfully.
         </p>
-        ${buildProgrammeSummary({ eventTitle, eventDate, venue })}
+        ${buildProgrammeSummary({ eventTitle: confName, eventDate, venue, credentials })}
         ${buildParticipantSummary({
           formData,
           amount: null,
@@ -128,28 +168,35 @@ async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formDa
         <p>
           You can try again by revisiting the registration page. If you need assistance, please contact the programme team.
         </p>
-        <p style="margin-top: 30px;">Warm regards,<br><strong>MET Institute of Computer Science</strong></p>
+        <p style="margin-top: 30px;">Warm regards,<br><strong>${fromName}</strong></p>
       </div>
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  await activeTransporter.sendMail(mailOptions);
 }
 
-async function sendAdminNotificationEmail({ eventTitle, eventDate, venue, amount, txnid, formData = {}, status }) {
-  if (!ADMIN_EMAILS.length) return;
-  const conferenceName = "ICETCISM2026";
+async function sendAdminNotificationEmail({ eventTitle, eventDate, venue, amount, txnid, formData = {}, status, credentials }) {
+  const adminList = credentials?.adminEmails || ADMIN_EMAILS;
+  if (!adminList.length) return;
+
+  const activeTransporter = getTransporter(credentials);
+  const fromEmail = credentials?.emailUser || process.env.EMAIL_USER;
+  const fromName = credentials?.instituteName || "MET Institute of Computer Science";
+  const confName = credentials?.conferenceName || eventTitle || "Conference";
+  
   const subjectPrefix = status === 'success' ? 'New Paid Registration' : status === 'failed' ? 'Payment Failed Registration' : 'New Registration';
+  
   const mailOptions = {
-    from: `"MET Institute of Computer Science" <${process.env.EMAIL_USER}>`,
-    to: ADMIN_EMAILS,
+    from: `"${fromName}" <${fromEmail}>`,
+    to: adminList,
     bcc: INTERNAL_AUDIT_EMAILS,
-    subject: `${subjectPrefix}: ${eventTitle}`,
+    subject: `${subjectPrefix}: ${confName}`,
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
         <h2 style="color: #111827;">Admin Registration Alert</h2>
-        <p>A registration update has been recorded for the ${conferenceName} programme.</p>
-        ${buildProgrammeSummary({ eventTitle, eventDate, venue })}
+        <p>A registration update has been recorded for the ${confName} programme.</p>
+        ${buildProgrammeSummary({ eventTitle: confName, eventDate, venue, credentials })}
         ${buildParticipantSummary({
           formData,
           amount,
@@ -160,7 +207,7 @@ async function sendAdminNotificationEmail({ eventTitle, eventDate, venue, amount
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  await activeTransporter.sendMail(mailOptions);
 }
 
 module.exports = { sendThankYouEmail, sendFailureEmail, sendAdminNotificationEmail };

@@ -12,14 +12,15 @@ function generatePayUHash({ key, salt, txnid, amount, productinfo, firstname, em
 }
 
 function generatePayUForm({
-  key, salt, txnid, amount, firstname, email, mobile, productinfo, success_url, failure_url
+  key, salt, txnid, amount, firstname, email, mobile, productinfo, success_url, failure_url, baseUrl
 }) {
   const hash = generatePayUHash({ key, salt, txnid, amount, productinfo, firstname, email });
+  const actionUrl = baseUrl || process.env.PAYU_BASE_URL || 'https://secure.payu.in/_payment';
 
   return `
     <html>
       <body onload="document.forms[0].submit()">
-        <form method="post" action="${process.env.PAYU_BASE_URL}">
+        <form method="post" action="${actionUrl}">
           <input type="hidden" name="key" value="${key}" />
           <input type="hidden" name="txnid" value="${txnid}" />
           <input type="hidden" name="amount" value="${amount}" />
@@ -41,17 +42,18 @@ function generateVerifyPaymentHash({ key, salt, txnid }) {
   return crypto.createHash('sha512').update(hashString).digest('hex');
 }
 
-function getVerifyPaymentUrl() {
+function getVerifyPaymentUrl(baseUrl) {
   if (process.env.PAYU_VERIFY_URL) return process.env.PAYU_VERIFY_URL;
 
-  if ((process.env.PAYU_BASE_URL || '').includes('secure.payu.in')) {
+  const urlToCheck = baseUrl || process.env.PAYU_BASE_URL || '';
+  if (urlToCheck.includes('secure.payu.in')) {
     return 'https://info.payu.in/merchant/postservice.php?form=2';
   }
 
   return 'https://test.payu.in/merchant/postservice.php?form=2';
 }
 
-async function verifyPaymentWithPayU({ key, salt, txnid }) {
+async function verifyPaymentWithPayU({ key, salt, txnid, baseUrl }) {
   const hash = generateVerifyPaymentHash({ key, salt, txnid });
   const payload = new URLSearchParams({
     key,
@@ -60,7 +62,7 @@ async function verifyPaymentWithPayU({ key, salt, txnid }) {
     hash,
   });
 
-  const response = await fetch(getVerifyPaymentUrl(), {
+  const response = await fetch(getVerifyPaymentUrl(baseUrl), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
