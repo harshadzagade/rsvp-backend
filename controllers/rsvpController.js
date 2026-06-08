@@ -7,6 +7,27 @@ const { getCredentialsForEvent } = require('../utils/config');
 
 const prisma = new PrismaClient();
 
+const extractField = (data, searchKeys) => {
+  if (typeof data !== 'object' || data === null) return '';
+  const entries = Object.entries(data);
+  const normalizedTargets = searchKeys.map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  for (const [key, value] of entries) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normalizedTargets.includes(normalizedKey) && value) {
+      return value;
+    }
+  }
+  for (const [key, value] of entries) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const target of normalizedTargets) {
+      if ((normalizedKey.includes(target) || target.includes(normalizedKey)) && value) {
+        return value;
+      }
+    }
+  }
+  return '';
+};
+
 const BASE_URL = process.env.BASE_URL;
 
 function verifyPayUHash({
@@ -102,10 +123,15 @@ exports.registerRSVP = async (req, res) => {
     let email = req.body.email || '';
     let mobile = req.body.mobile || '';
 
-    // Case-insensitive fallbacks for existing events with capitalized form keys
-    if (!fullName) fullName = formData?.fullName || formData?.FullName || formData?.Name || formData?.name || '';
-    if (!email) email = formData?.email || formData?.Email || '';
-    if (!mobile) mobile = formData?.mobile || formData?.Mobile || formData?.['WhatsApp Number'] || formData?.['Contact Number'] || formData?.['Contact number'] || '';
+    // Robust case/space-insensitive fallbacks for name, email, and mobile
+    if (!fullName) fullName = extractField(formData, ['fullname', 'name', 'nameasrequiredonthecertificate']);
+    if (!fullName) {
+      const first = extractField(formData, ['firstname', 'first']);
+      const last = extractField(formData, ['lastname', 'last']);
+      if (first || last) fullName = `${first} ${last}`.trim();
+    }
+    if (!email) email = extractField(formData, ['email', 'emailaddress']);
+    if (!mobile) mobile = extractField(formData, ['mobile', 'whatsappnumber', 'whatsapp', 'contactnumber', 'contact', 'phone']);
 
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) return res.status(404).json({ error: 'Event not found' });
@@ -323,8 +349,21 @@ exports.handlePayUSuccess = async (req, res) => {
       raw: req.body,
     });
 
-    const recipientEmail = rsvp?.email || email || rsvp?.formData?.email || rsvp?.formData?.Email || '';
-    const recipientName = rsvp?.fullName || firstname || rsvp?.formData?.fullName || rsvp?.formData?.FullName || rsvp?.formData?.name || rsvp?.formData?.Name || '';
+    let recipientEmail = rsvp?.email || email;
+    if (!recipientEmail) {
+      recipientEmail = extractField(rsvp?.formData, ['email', 'emailaddress']);
+    }
+
+    let recipientName = rsvp?.fullName || firstname;
+    if (!recipientName) {
+      recipientName = extractField(rsvp?.formData, ['fullname', 'name', 'nameasrequiredonthecertificate']);
+    }
+    if (!recipientName) {
+      const first = extractField(rsvp?.formData, ['firstname', 'first']);
+      const last = extractField(rsvp?.formData, ['lastname', 'last']);
+      if (first || last) recipientName = `${first} ${last}`.trim();
+    }
+
     const savedFormData = rsvp?.formData || {};
 
     await runEmailTasks([
@@ -401,8 +440,20 @@ exports.handlePayUFailure = async (req, res) => {
         raw: req.body,
       });
 
-      const failEmail = rsvp.email || rsvp.formData?.email || rsvp.formData?.Email || '';
-      const failName = rsvp.fullName || rsvp.formData?.fullName || rsvp.formData?.FullName || rsvp.formData?.name || rsvp.formData?.Name || '';
+      let failEmail = rsvp?.email;
+      if (!failEmail) {
+        failEmail = extractField(rsvp?.formData, ['email', 'emailaddress']);
+      }
+
+      let failName = rsvp?.fullName;
+      if (!failName) {
+        failName = extractField(rsvp?.formData, ['fullname', 'name', 'nameasrequiredonthecertificate']);
+      }
+      if (!failName) {
+        const first = extractField(rsvp?.formData, ['firstname', 'first']);
+        const last = extractField(rsvp?.formData, ['lastname', 'last']);
+        if (first || last) failName = `${first} ${last}`.trim();
+      }
 
       await runEmailTasks([
         sendFailureEmail({

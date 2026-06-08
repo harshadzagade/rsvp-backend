@@ -38,6 +38,7 @@ function getCredentialsForEvent(event) {
 
   const instituteName = process.env[`${prefix}_INSTITUTE_NAME`] || 'MET Institute of Computer Science';
   const conferenceName = process.env[`${prefix}_CONFERENCE_NAME`] || event?.title || 'Conference';
+  const whatsappLink = process.env[`${prefix}_WHATSAPP_LINK`] || null;
 
   return {
     prefix,
@@ -49,7 +50,8 @@ function getCredentialsForEvent(event) {
     adminEmail,
     adminEmails,
     instituteName,
-    conferenceName
+    conferenceName,
+    whatsappLink
   };
 }
 

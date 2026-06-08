@@ -48,7 +48,10 @@ const ADMIN_EMAILS = [
 
 const INTERNAL_AUDIT_EMAILS = ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu'];
 
-const formatDate = (value) => {
+const formatDate = (value, credentials) => {
+  if (credentials?.prefix === 'IOP' || (credentials?.conferenceName || '').toLowerCase().includes('pharmacy')) {
+    return '6th - 10th July 2026';
+  }
   if (!value) return '26 - 27 June 2026';
   return new Date(value).toLocaleDateString('en-IN', {
     day: 'numeric',
@@ -61,7 +64,7 @@ const buildProgrammeSummary = ({ eventTitle, eventDate, venue, credentials }) =>
   <div style="margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa;">
     <h3 style="margin: 0 0 12px; color: #111827;">Programme Details</h3>
     <p style="margin: 6px 0;"><strong>Programme:</strong> ${eventTitle}</p>
-    <p style="margin: 6px 0;"><strong>Date:</strong> ${formatDate(eventDate)}</p>
+    <p style="margin: 6px 0;"><strong>Date:</strong> ${formatDate(eventDate, credentials)}</p>
     <p style="margin: 6px 0;"><strong>Venue:</strong> ${venue || credentials?.instituteName || 'MET Institute of Computer Science'}</p>
   </div>
 `;
@@ -105,6 +108,22 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
   
   const adminList = credentials?.adminEmails || ADMIN_EMAILS;
 
+  const whatsappSection = credentials?.whatsappLink 
+    ? `
+      <div style="margin: 20px 0; padding: 16px; border: 1px solid #10B981; border-radius: 12px; background: #ECFDF5; color: #065F46;">
+        <p style="margin: 0 0 8px; font-weight: bold; font-size: 15px;">Action Required: Join WhatsApp Group</p>
+        <p style="margin: 0; font-size: 14px; line-height: 1.5;">
+          We have received your registration. Please join the WhatsApp group by clicking on the joining link:
+        </p>
+        <p style="margin: 12px 0 0;">
+          <a href="${credentials.whatsappLink}" target="_blank" style="display: inline-block; padding: 10px 20px; background: #10B981; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            Join WhatsApp Group
+          </a>
+        </p>
+      </div>
+    `
+    : '';
+
   const mailOptions = {
     from: `"${fromName}" <${fromEmail}>`,
     to,
@@ -119,6 +138,7 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
           Thank you for registering for the <strong>${confName}</strong>. 
           We have successfully received your details and payment.
         </p>
+        ${whatsappSection}
         ${buildProgrammeSummary({ eventTitle: confName, eventDate, venue, credentials })}
         ${buildParticipantSummary({
           formData,
