@@ -37,11 +37,24 @@ function getCredentialsForEvent(event) {
     .filter(Boolean);
 
   const instituteName = process.env[`${prefix}_INSTITUTE_NAME`] || 'MET Institute of Computer Science';
-  const conferenceName = process.env[`${prefix}_CONFERENCE_NAME`] || event?.title || 'Conference';
-  const whatsappLink = process.env[`${prefix}_WHATSAPP_LINK`] || null;
+  const cleanSlug = slug.replace(/-/g, '_').toUpperCase();
+
+  const conferenceName = process.env[`${prefix}_CONFERENCE_NAME_${cleanSlug}`]
+    || event?.title
+    || process.env[`${prefix}_CONFERENCE_NAME`]
+    || 'Conference';
+
+  const whatsappLink = process.env[`${prefix}_WHATSAPP_LINK_${cleanSlug}`]
+    || process.env[`${prefix}_WHATSAPP_LINK`]
+    || null;
+
+  const whatsappText = process.env[`${prefix}_WHATSAPP_TEXT_${cleanSlug}`]
+    || process.env[`${prefix}_WHATSAPP_TEXT`]
+    || 'We have received your registration. Please join the WhatsApp group by clicking on the joining link:';
 
   return {
     prefix,
+    slug,
     key,
     salt,
     baseUrl,
@@ -51,7 +64,8 @@ function getCredentialsForEvent(event) {
     adminEmails,
     instituteName,
     conferenceName,
-    whatsappLink
+    whatsappLink,
+    whatsappText
   };
 }
 

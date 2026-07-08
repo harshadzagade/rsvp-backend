@@ -49,8 +49,12 @@ const ADMIN_EMAILS = [
 const INTERNAL_AUDIT_EMAILS = ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu'];
 
 const formatDate = (value, credentials) => {
-  if (credentials?.prefix === 'IOP' || (credentials?.conferenceName || '').toLowerCase().includes('pharmacy')) {
+  const slug = String(credentials?.slug || '').toLowerCase();
+  if (slug === 'iop-fdp') {
     return '6th - 10th July 2026';
+  }
+  if (slug === 'iop-fdp-python') {
+    return '17th and 18th July 2026';
   }
   if (!value) return '26 - 27 June 2026';
   return new Date(value).toLocaleDateString('en-IN', {
@@ -113,7 +117,7 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
       <div style="margin: 20px 0; padding: 16px; border: 1px solid #10B981; border-radius: 12px; background: #ECFDF5; color: #065F46;">
         <p style="margin: 0 0 8px; font-weight: bold; font-size: 15px;">Action Required: Join WhatsApp Group</p>
         <p style="margin: 0; font-size: 14px; line-height: 1.5;">
-          We have received your registration. Please join the WhatsApp group by clicking on the joining link:
+          ${credentials.whatsappText || 'We have received your registration. Please join the WhatsApp group by clicking on the joining link:'}
         </p>
         <p style="margin: 12px 0 0;">
           <a href="${credentials.whatsappLink}" target="_blank" style="display: inline-block; padding: 10px 20px; background: #10B981; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
