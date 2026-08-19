@@ -56,6 +56,9 @@ const formatDate = (value, credentials) => {
   if (slug === 'iop-fdp-python') {
     return '17th and 18th July 2026';
   }
+  if (slug === 'iop-cosmonext') {
+    return '3rd - 4th September 2026';
+  }
   if (!value) return '26 - 27 June 2026';
   return new Date(value).toLocaleDateString('en-IN', {
     day: 'numeric',
@@ -73,25 +76,52 @@ const buildProgrammeSummary = ({ eventTitle, eventDate, venue, credentials }) =>
   </div>
 `;
 
+const normalizeLabel = (key) =>
+  key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/[_-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^./, (char) => char.toUpperCase());
+
 const buildParticipantSummary = ({ formData = {}, amount, txnid, statusLabel }) => {
+  const handledKeys = new Set([
+    'fullname', 'name', 'email', 'mobile', 'whatsappnumber', 'contactnumber', 'phone',
+    'category', 'participationcategory', 'participationmode', 'paymenttype',
+    'organisation', 'institutename', 'nameofinstitutecollege', 'designation',
+    'certificatename', 'joiningreason', 'txnid'
+  ]);
+
   const rows = [
     ['Name', formData.fullName || formData.FullName || formData.name || ''],
     ['Email', formData.email || formData.Email || ''],
-    ['Mobile', formData.mobile || formData.Mobile || formData['WhatsApp Number'] || ''],
+    ['Mobile', formData.mobile || formData.Mobile || formData['WhatsApp Number'] || formData['Contact number'] || formData.contactNumber || ''],
     ['Category', formData.category || formData.ParticipationCategory || ''],
-    ['Participation Mode', formData.participationMode || formData.PaymentType || 'Online'],
+    ['Participation Mode', formData.participationMode || formData.PaymentType || ''],
     ['Organisation', formData.organisation || formData.instituteName || formData['Name of Institute/College'] || ''],
     ['Designation', formData.designation || formData.Designation || ''],
-    ['Certificate Name', formData.certificateName || formData.FullName || ''],
+    ['Certificate Name', formData.certificateName || ''],
     ['Joining Reason', formData.joiningReason || ''],
-    ['Transaction ID', txnid],
-    ['Payment Status', statusLabel],
-    ['Amount', amount || amount === 0 ? `Rs. ${Number(amount).toLocaleString('en-IN')}` : 'Not completed'],
-  ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+  ];
+
+  // Append any extra form fields dynamically (e.g. poster presentation fields)
+  Object.entries(formData).forEach(([key, value]) => {
+    const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!handledKeys.has(cleanKey) && value !== undefined && value !== null && value !== '') {
+      rows.push([normalizeLabel(key), value]);
+    }
+  });
+
+  // Append Transaction metadata at bottom
+  rows.push(['Transaction ID', txnid]);
+  rows.push(['Payment Status', statusLabel]);
+  rows.push(['Amount', (amount !== undefined && amount !== null && amount !== '') ? `Rs. ${Number(amount).toLocaleString('en-IN')}` : 'Not completed']);
+
+  const filteredRows = rows.filter(([, value]) => value !== undefined && value !== null && value !== '');
 
   return `
     <table style="margin: 20px 0; border-collapse: collapse; width: 100%;">
-      ${rows.map(([label, value]) => `
+      ${filteredRows.map(([label, value]) => `
         <tr>
           <td style="padding: 8px 12px; font-weight: bold; border: 1px solid #e5e7eb; width: 220px; vertical-align: top;">${label}</td>
           <td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${value}</td>

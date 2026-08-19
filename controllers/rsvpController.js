@@ -229,7 +229,7 @@ exports.registerRSVP = async (req, res) => {
         }),
       ]);
 
-      return sendBrowserRedirect(res, `${BASE_URL}/thank-you?free=true`);
+      return sendBrowserRedirect(res, `${BASE_URL}/thank-you?free=true&slug=${event.slug}`);
     }
 
     const formHtml = generatePayUForm({
@@ -390,7 +390,7 @@ exports.handlePayUSuccess = async (req, res) => {
       }),
     ]);
 
-    return sendBrowserRedirect(res, `${BASE_URL}/thank-you`);
+    return sendBrowserRedirect(res, `${BASE_URL}/thank-you?slug=${event.slug}`);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -478,7 +478,7 @@ exports.handlePayUFailure = async (req, res) => {
       ]);
     }
 
-    return sendBrowserRedirect(res, `${BASE_URL}/payment-failed?error=declined`);
+    return sendBrowserRedirect(res, `${BASE_URL}/payment-failed?error=declined&slug=${rsvp.event.slug}`);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');

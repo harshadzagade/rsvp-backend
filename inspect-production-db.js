@@ -8,7 +8,7 @@ async function main() {
   });
   console.log('--- ALL DATABASE EVENTS ---');
   events.forEach(e => {
-    console.log(`ID: ${e.id} | Slug: ${e.slug} | Title: ${e.title}`);
+    console.log(`ID: ${e.id} | Slug: ${e.slug} | Title: ${e.title} | Fee: ${e.fee}`);
     console.log(`Form Fields:`, JSON.stringify(e.formFields, null, 2));
     console.log('----------------------------------------------------');
   });
