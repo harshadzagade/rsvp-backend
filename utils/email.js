@@ -46,7 +46,7 @@ const ADMIN_EMAILS = [
   .map((email) => email.trim())
   .filter(Boolean);
 
-const INTERNAL_AUDIT_EMAILS = ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'harshadz_ics@met.edu'];
+const INTERNAL_AUDIT_EMAILS = ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'artig_iom@met.edu'];
 
 const formatDate = (value, credentials) => {
   const slug = String(credentials?.slug || '').toLowerCase();
