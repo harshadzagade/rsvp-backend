@@ -140,6 +140,7 @@ function replaceVariables(templateStr, data) {
     .replace(/{name}/g, data.name || 'Participant')
     .replace(/{eventName}/g, data.confName || 'Event')
     .replace(/{eventTitle}/g, data.confName || 'Event')
+    .replace(/{confName}/g, data.confName || 'Event')
     .replace(/{date}/g, data.eventDate ? formatDate(data.eventDate, data.credentials) : '')
     .replace(/{venue}/g, data.venue || data.fromName || 'MET Campus')
     .replace(/{amount}/g, data.amount ? `Rs. ${Number(data.amount).toLocaleString('en-IN')}` : 'Free')
