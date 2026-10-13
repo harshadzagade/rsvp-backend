@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { parseEmailList } = require('./config');
 
 const defaultTransporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -158,7 +159,11 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
   const confName = credentials?.conferenceName || eventTitle || "Conference";
   const brandColor = credentials?.brandColor || '#B91C1C';
   
-  const adminList = credentials?.adminEmails || ADMIN_EMAILS;
+  const rawAdmin = (credentials?.adminEmails && credentials.adminEmails.length > 0)
+    ? credentials.adminEmails
+    : ADMIN_EMAILS;
+  const adminList = parseEmailList(rawAdmin);
+  const cleanCcList = adminList.filter((e) => e.toLowerCase() !== String(to || '').toLowerCase());
 
   const templateContext = { name, confName, fromName, eventDate, venue, amount, txnid, credentials };
 
@@ -202,8 +207,6 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
   const mailOptions = {
     from: `"${fromName}" <${fromEmail}>`,
     to,
-    cc: adminList,
-    bcc: INTERNAL_AUDIT_EMAILS,
     subject: emailSubject,
     html: `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
@@ -239,7 +242,16 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
     `,
   };
 
-  await activeTransporter.sendMail(mailOptions);
+  if (cleanCcList.length > 0) {
+    mailOptions.cc = cleanCcList;
+  }
+  if (INTERNAL_AUDIT_EMAILS.length > 0) {
+    mailOptions.bcc = INTERNAL_AUDIT_EMAILS;
+  }
+
+  const info = await activeTransporter.sendMail(mailOptions);
+  console.log(`[Email] sendThankYouEmail sent to "${to}", CC: [${cleanCcList.join(', ')}], ID: ${info.messageId}`);
+  return info;
 }
 
 async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formData = {}, credentials }) {
@@ -248,13 +260,15 @@ async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formDa
   const fromName = credentials?.instituteName || "MET Institute of Computer Science";
   const confName = credentials?.conferenceName || eventTitle || "Conference";
   
-  const adminList = credentials?.adminEmails || ADMIN_EMAILS;
+  const rawAdmin = (credentials?.adminEmails && credentials.adminEmails.length > 0)
+    ? credentials.adminEmails
+    : ADMIN_EMAILS;
+  const adminList = parseEmailList(rawAdmin);
+  const cleanCcList = adminList.filter((e) => e.toLowerCase() !== String(to || '').toLowerCase());
 
   const mailOptions = {
     from: `"${fromName}" <${fromEmail}>`,
     to,
-    cc: adminList,
-    bcc: INTERNAL_AUDIT_EMAILS,
     subject: `Payment Failed: ${confName}`,
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
@@ -278,12 +292,27 @@ async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formDa
     `,
   };
 
-  await activeTransporter.sendMail(mailOptions);
+  if (cleanCcList.length > 0) {
+    mailOptions.cc = cleanCcList;
+  }
+  if (INTERNAL_AUDIT_EMAILS.length > 0) {
+    mailOptions.bcc = INTERNAL_AUDIT_EMAILS;
+  }
+
+  const info = await activeTransporter.sendMail(mailOptions);
+  console.log(`[Email] sendFailureEmail sent to "${to}", CC: [${cleanCcList.join(', ')}], ID: ${info.messageId}`);
+  return info;
 }
 
 async function sendAdminNotificationEmail({ eventTitle, eventDate, venue, amount, txnid, formData = {}, status, credentials }) {
-  const adminList = credentials?.adminEmails || ADMIN_EMAILS;
-  if (!adminList.length) return;
+  const rawAdmin = (credentials?.adminEmails && credentials.adminEmails.length > 0)
+    ? credentials.adminEmails
+    : ADMIN_EMAILS;
+  const adminList = parseEmailList(rawAdmin);
+  if (!adminList.length) {
+    console.log('[Email] No admin CC emails configured, skipping admin notification.');
+    return;
+  }
 
   const activeTransporter = getTransporter(credentials);
   const fromEmail = credentials?.emailUser || process.env.EMAIL_USER;
@@ -295,12 +324,11 @@ async function sendAdminNotificationEmail({ eventTitle, eventDate, venue, amount
   const mailOptions = {
     from: `"${fromName}" <${fromEmail}>`,
     to: adminList,
-    bcc: INTERNAL_AUDIT_EMAILS,
     subject: `${subjectPrefix}: ${confName}`,
     html: `
       <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
         <h2 style="color: #111827;">Admin Registration Alert</h2>
-        <p>A registration update has been recorded for the ${confName} programme.</p>
+        <p>A registration update has been recorded for the <strong>${confName}</strong> programme.</p>
         ${buildProgrammeSummary({ eventTitle: confName, eventDate, venue, credentials })}
         ${buildParticipantSummary({
           formData,
@@ -312,7 +340,13 @@ async function sendAdminNotificationEmail({ eventTitle, eventDate, venue, amount
     `,
   };
 
-  await activeTransporter.sendMail(mailOptions);
+  if (INTERNAL_AUDIT_EMAILS.length > 0) {
+    mailOptions.bcc = INTERNAL_AUDIT_EMAILS;
+  }
+
+  const info = await activeTransporter.sendMail(mailOptions);
+  console.log(`[Email] sendAdminNotificationEmail sent to [${adminList.join(', ')}], ID: ${info.messageId}`);
+  return info;
 }
 
 module.exports = { sendThankYouEmail, sendFailureEmail, sendAdminNotificationEmail };

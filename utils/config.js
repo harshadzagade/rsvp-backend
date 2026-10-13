@@ -5,6 +5,17 @@ dotenv.config();
 const prisma = new PrismaClient();
 const settingsCache = new Map();
 
+function parseEmailList(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    raw = raw.join(',');
+  }
+  return String(raw)
+    .split(/[,;\s]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e && e.includes('@'));
+}
+
 // Helper to refresh settings cache from database
 async function refreshSettingsCache() {
   try {
@@ -17,6 +28,12 @@ async function refreshSettingsCache() {
     }
   } catch (err) {
     console.error('Failed to preload institute settings into cache:', err.message);
+  }
+}
+
+function setSettingInCache(code, setting) {
+  if (code && setting) {
+    settingsCache.set(code.toUpperCase(), setting);
   }
 }
 
@@ -56,11 +73,9 @@ function getCredentialsForEvent(event) {
   const emailUser = dbSetting?.emailUser || process.env[`${prefix}_EMAIL_USER`] || process.env.EMAIL_USER;
   const emailPass = dbSetting?.emailPass || process.env[`${prefix}_EMAIL_PASS`] || process.env.EMAIL_PASS;
   
-  // Parse CC / admin emails
+  // Parse CC / admin emails (handles commas, semicolons, and spaces)
   const rawAdminEmails = dbSetting?.adminEmails || process.env[`${prefix}_ADMIN_EMAILS`] || process.env.ADMIN_EMAILS || process.env[`${prefix}_ADMIN_EMAIL`] || process.env.ADMIN_EMAIL;
-  const adminEmails = (rawAdminEmails ? rawAdminEmails.split(',') : [])
-    .map((e) => e.trim())
-    .filter(Boolean);
+  const adminEmails = parseEmailList(rawAdminEmails);
 
   const instituteName = dbSetting?.instituteName || process.env[`${prefix}_INSTITUTE_NAME`] || 'Mumbai Educational Trust';
   const cleanSlug = slug.replace(/-/g, '_').toUpperCase();
@@ -110,5 +125,7 @@ function getCredentialsForEvent(event) {
 
 module.exports = {
   getCredentialsForEvent,
-  refreshSettingsCache
+  refreshSettingsCache,
+  setSettingInCache,
+  parseEmailList
 };

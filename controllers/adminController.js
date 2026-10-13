@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { refreshSettingsCache } = require('../utils/config');
+const { refreshSettingsCache, setSettingInCache, parseEmailList } = require('../utils/config');
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -129,15 +129,20 @@ exports.getInstituteSettings = async (req, res) => {
   }
 };
 
-// Update or Create Institute Setting (SUPERADMIN Only)
+// Update or Create Institute Setting (SUPERADMIN or Institute ADMIN)
 exports.updateInstituteSetting = async (req, res) => {
   try {
     const user = req.user;
-    if (!user || user.role !== 'SUPERADMIN') {
-      return res.status(403).json({ error: 'Access denied. Only Superadmin can modify payment & email credentials.' });
+    const { code } = req.params;
+    const instituteCodeUpper = code ? code.toUpperCase() : '';
+
+    const isSuperAdmin = user && user.role === 'SUPERADMIN';
+    const isInstituteAdmin = user && user.role === 'ADMIN' && (!user.institute || user.institute.toUpperCase() === instituteCodeUpper);
+
+    if (!isSuperAdmin && !isInstituteAdmin) {
+      return res.status(403).json({ error: 'Access denied. You do not have permission to modify settings for this institute.' });
     }
 
-    const { code } = req.params;
     const {
       instituteName,
       payuKey,
@@ -157,22 +162,25 @@ exports.updateInstituteSetting = async (req, res) => {
 
     // Fetch existing setting so masked placeholder doesn't overwrite real salt/password
     const existing = await prisma.instituteSetting.findUnique({
-      where: { instituteCode: code.toUpperCase() }
+      where: { instituteCode: instituteCodeUpper }
     });
 
     const finalPayuSalt = (payuSalt && !payuSalt.includes('••••')) ? payuSalt : (existing?.payuSalt || '');
     const finalEmailPass = (emailPass && !emailPass.includes('••••')) ? emailPass : (existing?.emailPass || '');
 
+    // Normalize admin CC emails (handles semicolons, commas, extra whitespace)
+    const normalizedAdminEmails = parseEmailList(adminEmails).join(', ');
+
     const setting = await prisma.instituteSetting.upsert({
-      where: { instituteCode: code.toUpperCase() },
+      where: { instituteCode: instituteCodeUpper },
       update: {
-        instituteName: instituteName || code.toUpperCase(),
-        payuKey,
-        payuSalt: finalPayuSalt,
+        instituteName: instituteName || instituteCodeUpper,
+        payuKey: isSuperAdmin ? payuKey : (existing?.payuKey || payuKey),
+        payuSalt: isSuperAdmin ? finalPayuSalt : (existing?.payuSalt || finalPayuSalt),
         payuBaseUrl: payuBaseUrl || 'https://secure.payu.in/_payment',
-        emailUser,
+        emailUser: emailUser || existing?.emailUser,
         emailPass: finalEmailPass,
-        adminEmails,
+        adminEmails: normalizedAdminEmails,
         whatsappLink,
         whatsappText,
         emailSubject,
@@ -182,14 +190,14 @@ exports.updateInstituteSetting = async (req, res) => {
         brandColor: brandColor || '#B91C1C'
       },
       create: {
-        instituteCode: code.toUpperCase(),
-        instituteName: instituteName || code.toUpperCase(),
+        instituteCode: instituteCodeUpper,
+        instituteName: instituteName || instituteCodeUpper,
         payuKey,
         payuSalt: finalPayuSalt,
         payuBaseUrl: payuBaseUrl || 'https://secure.payu.in/_payment',
         emailUser,
         emailPass: finalEmailPass,
-        adminEmails,
+        adminEmails: normalizedAdminEmails,
         whatsappLink,
         whatsappText,
         emailSubject,
@@ -200,9 +208,12 @@ exports.updateInstituteSetting = async (req, res) => {
       }
     });
 
+    setSettingInCache(instituteCodeUpper, setting);
     await refreshSettingsCache();
 
-    res.json({ message: `Settings for ${code.toUpperCase()} updated successfully`, setting });
+    console.log(`[Admin] Settings for ${instituteCodeUpper} updated successfully. CC recipients: "${normalizedAdminEmails}"`);
+
+    res.json({ message: `Settings for ${instituteCodeUpper} updated successfully`, setting });
   } catch (err) {
     console.error('Update institute setting error:', err);
     res.status(500).json({ error: 'Failed to update institute setting' });

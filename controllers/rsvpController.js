@@ -92,9 +92,11 @@ function sendBrowserRedirect(res, destination) {
 
 async function runEmailTasks(tasks) {
   const results = await Promise.allSettled(tasks);
-  results.forEach((result) => {
+  results.forEach((result, idx) => {
     if (result.status === 'rejected') {
-      console.error('Email task failed:', result.reason);
+      console.error(`[Email Task ${idx}] FAILED:`, result.reason?.message || result.reason);
+    } else {
+      console.log(`[Email Task ${idx}] SUCCESS`);
     }
   });
 }
