@@ -103,21 +103,40 @@ exports.deleteUser = async (req, res) => {
 };
 
 // Get all Institute Settings (PayU, Email, CC recipients, WhatsApp)
+// Security: Only SUPERADMIN can view sensitive credentials. Sensitive fields are masked.
 exports.getInstituteSettings = async (req, res) => {
   try {
+    const user = req.user;
+    if (!user || user.role !== 'SUPERADMIN') {
+      return res.status(403).json({ error: 'Access denied. Only Superadmin can view payment & email configurations.' });
+    }
+
     const settings = await prisma.instituteSetting.findMany({
       orderBy: { instituteCode: 'asc' }
     });
-    res.json(settings);
+
+    // Mask sensitive keys for client response
+    const sanitizedSettings = settings.map(s => ({
+      ...s,
+      payuSalt: s.payuSalt ? '••••••••••••••••' : '',
+      emailPass: s.emailPass ? '••••••••••••••••' : '',
+    }));
+
+    res.json(sanitizedSettings);
   } catch (err) {
     console.error('Get institute settings error:', err);
     res.status(500).json({ error: 'Failed to fetch institute settings' });
   }
 };
 
-// Update or Create Institute Setting
+// Update or Create Institute Setting (SUPERADMIN Only)
 exports.updateInstituteSetting = async (req, res) => {
   try {
+    const user = req.user;
+    if (!user || user.role !== 'SUPERADMIN') {
+      return res.status(403).json({ error: 'Access denied. Only Superadmin can modify payment & email credentials.' });
+    }
+
     const { code } = req.params;
     const {
       instituteName,
@@ -136,15 +155,23 @@ exports.updateInstituteSetting = async (req, res) => {
       brandColor
     } = req.body;
 
+    // Fetch existing setting so masked placeholder doesn't overwrite real salt/password
+    const existing = await prisma.instituteSetting.findUnique({
+      where: { instituteCode: code.toUpperCase() }
+    });
+
+    const finalPayuSalt = (payuSalt && !payuSalt.includes('••••')) ? payuSalt : (existing?.payuSalt || '');
+    const finalEmailPass = (emailPass && !emailPass.includes('••••')) ? emailPass : (existing?.emailPass || '');
+
     const setting = await prisma.instituteSetting.upsert({
       where: { instituteCode: code.toUpperCase() },
       update: {
         instituteName: instituteName || code.toUpperCase(),
         payuKey,
-        payuSalt,
+        payuSalt: finalPayuSalt,
         payuBaseUrl: payuBaseUrl || 'https://secure.payu.in/_payment',
         emailUser,
-        emailPass,
+        emailPass: finalEmailPass,
         adminEmails,
         whatsappLink,
         whatsappText,
@@ -158,10 +185,10 @@ exports.updateInstituteSetting = async (req, res) => {
         instituteCode: code.toUpperCase(),
         instituteName: instituteName || code.toUpperCase(),
         payuKey,
-        payuSalt,
+        payuSalt: finalPayuSalt,
         payuBaseUrl: payuBaseUrl || 'https://secure.payu.in/_payment',
         emailUser,
-        emailPass,
+        emailPass: finalEmailPass,
         adminEmails,
         whatsappLink,
         whatsappText,

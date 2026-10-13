@@ -12,9 +12,9 @@ router.get('/users', verifyToken, adminController.getAllUsers);
 router.put('/users/:id', verifyToken, checkRole('SUPERADMIN'), adminController.updateUser);
 router.delete('/users/:id', verifyToken, checkRole('SUPERADMIN'), adminController.deleteUser);
 
-// Institute Settings (Protected: ADMIN & SUPERADMIN)
-router.get('/settings', verifyToken, adminController.getInstituteSettings);
-router.put('/settings/:code', verifyToken, checkRole('ADMIN', 'SUPERADMIN'), adminController.updateInstituteSetting);
+// Institute Settings (Protected: SUPERADMIN Only)
+router.get('/settings', verifyToken, checkRole('SUPERADMIN'), adminController.getInstituteSettings);
+router.put('/settings/:code', verifyToken, checkRole('SUPERADMIN'), adminController.updateInstituteSetting);
 
 // RSVPs (Protected: Token mandatory, scoped to user institute)
 router.get('/rsvps', verifyToken, adminController.getAllRSVPs);
