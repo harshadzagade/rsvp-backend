@@ -59,6 +59,9 @@ const formatDate = (value, credentials) => {
   if (slug === 'iop-cosmonext') {
     return '3rd - 4th September 2026';
   }
+  if (slug.includes('sfx')) {
+    return '21st October 2026';
+  }
   if (!value) return '26 - 27 June 2026';
   return new Date(value).toLocaleDateString('en-IN', {
     day: 'numeric',
@@ -131,6 +134,19 @@ const buildParticipantSummary = ({ formData = {}, amount, txnid, statusLabel }) 
   `;
 };
 
+function replaceVariables(templateStr, data) {
+  if (!templateStr) return '';
+  return templateStr
+    .replace(/{name}/g, data.name || 'Participant')
+    .replace(/{eventName}/g, data.confName || 'Event')
+    .replace(/{eventTitle}/g, data.confName || 'Event')
+    .replace(/{date}/g, data.eventDate ? formatDate(data.eventDate, data.credentials) : '')
+    .replace(/{venue}/g, data.venue || data.fromName || 'MET Campus')
+    .replace(/{amount}/g, data.amount ? `Rs. ${Number(data.amount).toLocaleString('en-IN')}` : 'Free')
+    .replace(/{txnid}/g, data.txnid || '-')
+    .replace(/{instituteName}/g, data.fromName || 'MET');
+}
+
 async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amount, txnid, formData = {}, credentials }) {
   const isFree = !amount || Number(amount) === 0;
   const mode = formData.participationMode || formData.PaymentType || 'Selected mode';
@@ -139,8 +155,32 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
   const fromEmail = credentials?.emailUser || process.env.EMAIL_USER;
   const fromName = credentials?.instituteName || "MET Institute of Computer Science";
   const confName = credentials?.conferenceName || eventTitle || "Conference";
+  const brandColor = credentials?.brandColor || '#B91C1C';
   
   const adminList = credentials?.adminEmails || ADMIN_EMAILS;
+
+  const templateContext = { name, confName, fromName, eventDate, venue, amount, txnid, credentials };
+
+  const emailSubject = credentials?.emailSubject
+    ? replaceVariables(credentials.emailSubject, templateContext)
+    : `${isFree ? 'Registration Confirmed' : 'Payment Confirmed'}: ${confName}`;
+
+  const emailHeading = credentials?.emailHeading
+    ? replaceVariables(credentials.emailHeading, templateContext)
+    : 'Registration Confirmation';
+
+  const emailBodyHtml = credentials?.emailBody
+    ? `<div style="font-size: 15px; line-height: 1.6; color: #374151; margin: 16px 0;">${replaceVariables(credentials.emailBody, templateContext).replace(/\n/g, '<br/>')}</div>`
+    : `
+      <p style="font-size: 15px; line-height: 1.6; color: #374151;">
+        Thank you for registering for the <strong>${confName}</strong>. 
+        We have successfully received your details and payment.
+      </p>
+    `;
+
+  const emailFooterHtml = credentials?.emailFooter
+    ? `<div style="margin-top: 30px; font-size: 14px; color: #4B5563;">${replaceVariables(credentials.emailFooter, templateContext).replace(/\n/g, '<br/>')}</div>`
+    : `<p style="margin-top: 30px; font-size: 14px; color: #4B5563;">Warm regards,<br><strong>${fromName}</strong></p>`;
 
   const whatsappSection = credentials?.whatsappLink 
     ? `
@@ -163,27 +203,37 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
     to,
     cc: adminList,
     bcc: INTERNAL_AUDIT_EMAILS,
-    subject: `${isFree ? 'Registration Confirmed' : 'Payment Confirmed'}: ${confName}`,
+    subject: emailSubject,
     html: `
-      <div style="font-family: 'Segoe UI', sans-serif; padding: 20px; color: #333;">
-        <h2 style="color: #B91C1C;">Registration Confirmation</h2>
-        <p>Dear <strong>${name}</strong>,</p>
-        <p>
-          Thank you for registering for the <strong>${confName}</strong>. 
-          We have successfully received your details and payment.
-        </p>
-        ${whatsappSection}
-        ${buildProgrammeSummary({ eventTitle: confName, eventDate, venue, credentials })}
-        ${buildParticipantSummary({
-          formData,
-          amount,
-          txnid,
-          statusLabel: isFree ? 'Registered' : `Paid (${mode})`,
-        })}
-        <p> 
-          We look forward to seeing you!
-        </p>
-        <p style="margin-top: 30px;">Warm regards,<br><strong>${fromName}</strong></p>
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <div style="background: ${brandColor}; padding: 24px; text-align: center; color: white;">
+          <h1 style="margin: 0; font-size: 22px; font-weight: bold; letter-spacing: 0.5px;">${fromName}</h1>
+          <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.9;">Official Event Registration Receipt</p>
+        </div>
+        
+        <div style="padding: 28px; color: #1f2937;">
+          <h2 style="color: ${brandColor}; margin-top: 0; font-size: 20px;">${emailHeading}</h2>
+          <p style="font-size: 15px;">Dear <strong>${name}</strong>,</p>
+          
+          ${emailBodyHtml}
+
+          ${whatsappSection}
+
+          ${buildProgrammeSummary({ eventTitle: confName, eventDate, venue, credentials })}
+
+          ${buildParticipantSummary({
+            formData,
+            amount,
+            txnid,
+            statusLabel: isFree ? 'Registered' : `Paid (${mode})`,
+          })}
+
+          <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+            Please preserve this email as your official confirmation for event entry and certificate issuance.
+          </p>
+
+          ${emailFooterHtml}
+        </div>
       </div>
     `,
   };

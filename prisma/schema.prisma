@@ -32,10 +32,33 @@ model Event {
   fee        Int      // Default flat fee (required)
   feeOptions Json?    // 👈 Optional multiple-fee structure
   formFields Json
+  isActive   Boolean  @default(true)
+  institute  String?  @default("IMM")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   rsvps      RSVP[]
+}
+
+model InstituteSetting {
+  id            Int      @id @default(autoincrement())
+  instituteCode String   @unique // 'IMM', 'IOP', 'ICS', 'PGDM'
+  instituteName String
+  payuKey       String?
+  payuSalt      String?
+  payuBaseUrl   String?  @default("https://secure.payu.in/_payment")
+  emailUser     String?
+  emailPass     String?
+  adminEmails   String?  // Comma-separated list of CC/admin emails
+  whatsappLink  String?
+  whatsappText  String?
+  emailSubject  String?
+  emailHeading  String?
+  emailBody     String?
+  emailFooter   String?
+  brandColor    String?  @default("#B91C1C")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 

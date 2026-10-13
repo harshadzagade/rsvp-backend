@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 
 exports.createEvent = async (req, res) => {
   try {
-    const { title, slug, date, venue, fee, feeOptions, formFields } = req.body;
+    const { title, slug, date, venue, fee, feeOptions, formFields, institute } = req.body;
 
     if (feeOptions) {
       if (!Array.isArray(feeOptions.options)) {
@@ -40,7 +40,7 @@ exports.createEvent = async (req, res) => {
     }
 
     const event = await prisma.event.create({
-      data: { title, slug, date: new Date(date), venue, fee, feeOptions, formFields }
+      data: { title, slug, date: new Date(date), venue, fee, feeOptions, formFields, institute: institute || 'IMM' }
     });
     res.json(event);
   } catch (err) {
@@ -52,7 +52,16 @@ exports.createEvent = async (req, res) => {
 
 exports.getAllEvents = async (req, res) => {
   try {
+    const { institute } = req.query;
+    const where = {};
+    if (institute && institute !== 'ALL') {
+      where.OR = [
+        { institute: institute.toUpperCase() },
+        { slug: { contains: institute.toLowerCase() } }
+      ];
+    }
     const events = await prisma.event.findMany({
+      where,
       orderBy: { createdAt: 'desc' }
     });
     res.json(events);
@@ -94,5 +103,53 @@ exports.getEventById = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not fetch event' });
+  }
+};
+
+exports.updateEvent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, slug, date, venue, fee, feeOptions, formFields, isActive, institute } = req.body;
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (slug !== undefined) updateData.slug = slug;
+    if (date !== undefined) updateData.date = new Date(date);
+    if (venue !== undefined) updateData.venue = venue;
+    if (fee !== undefined) updateData.fee = Number(fee);
+    if (feeOptions !== undefined) updateData.feeOptions = feeOptions;
+    if (formFields !== undefined) updateData.formFields = formFields;
+    if (isActive !== undefined) updateData.isActive = Boolean(isActive);
+    if (institute !== undefined) updateData.institute = institute;
+
+    const event = await prisma.event.update({
+      where: { id: parseInt(id) },
+      data: updateData
+    });
+
+    res.json(event);
+  } catch (err) {
+    console.error('Update event error:', err);
+    res.status(500).json({ error: 'Could not update event' });
+  }
+};
+
+exports.toggleEventStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.event.findUnique({ where: { id: parseInt(id) } });
+    if (!existing) return res.status(404).json({ error: 'Event not found' });
+
+    const newStatus = typeof req.body.isActive === 'boolean' ? req.body.isActive : !existing.isActive;
+
+    const event = await prisma.event.update({
+      where: { id: parseInt(id) },
+      data: { isActive: newStatus }
+    });
+
+    res.json({ message: `Event ${newStatus ? 'activated' : 'deactivated'} successfully`, event });
+  } catch (err) {
+    console.error('Toggle status error:', err);
+    res.status(500).json({ error: 'Could not change event status' });
   }
 };

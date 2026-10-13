@@ -1,11 +1,49 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const rsvpRoutes = require('./routes/rsvpRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
+
+// Trust reverse proxy (Nginx / IIS / Cloudflare) so express-rate-limit and IP detection work accurately
+app.set('trust proxy', 1);
+
+// Security Headers with Helmet (Allows embedding if needed while protecting against XSS/Sniffing)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false, // Leave CSP flexible for embedded PayU forms and external assets
+}));
+
+// Rate Limiters
+// 1. Strict Limiter for Admin Login (Blocks Brute Force: max 10 attempts per 15 minutes)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
+});
+app.use('/api/admin/login', loginLimiter);
+
+// 2. RSVP Registration Limiter (Blocks spam submissions: max 30 per 10 minutes per IP)
+const rsvpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many registrations from this network. Please wait a moment.' },
+});
+app.use('/api/rsvp', (req, res, next) => {
+  // Only rate-limit POST /rsvp initiation, never PayU webhooks
+  if (req.method === 'POST' && req.path === '') {
+    return rsvpLimiter(req, res, next);
+  }
+  next();
+});
 
 const allowedOrigins = [
   'https://events.met.edu',
@@ -47,8 +85,8 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 app.use('/api', rsvpRoutes);
 app.use('/api', eventRoutes);

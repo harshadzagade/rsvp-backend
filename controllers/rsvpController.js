@@ -136,6 +136,21 @@ exports.registerRSVP = async (req, res) => {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
+    if (event.isActive === false) {
+      return res.status(400).send(`
+        <html>
+          <body style="font-family: 'Segoe UI', Arial, sans-serif; text-align: center; padding: 50px; background: #fafafa; color: #333;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e5e7eb;">
+              <h2 style="color: #DC2626; margin-top: 0;">Registrations Closed</h2>
+              <p style="font-size: 16px; line-height: 1.5; color: #4B5563;">Registrations for this event have been deactivated by the event administrator.</p>
+              <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e5e7eb;" />
+              <p style="font-size: 14px; color: #6B7280;">If you have any questions, please contact the event organizing team.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+
     const credentials = getCredentialsForEvent(event);
     if (!credentials) {
       console.error('RSVP attempted for unconfigured event:', { eventId, slug: event.slug });
@@ -321,6 +336,22 @@ exports.handlePayUSuccess = async (req, res) => {
         });
         return res.status(400).send('Hash mismatch. Potential fraud.');
       }
+    }
+
+    // Security Check: Amount verification against RSVP breakdown / event fee
+    const receivedAmount = parseFloat(amount || 0);
+    const expectedAmount = rsvp.formData?.amountBreakdown?.total 
+      ? parseFloat(rsvp.formData.amountBreakdown.total) 
+      : parseFloat(event.fee || 0);
+
+    // If expected amount is greater than 0, prevent underpaid fraud
+    if (expectedAmount > 0 && Math.abs(receivedAmount - expectedAmount) > 2) {
+      console.error('Potential fraud: Amount mismatch', {
+        txnid,
+        receivedAmount,
+        expectedAmount,
+      });
+      return res.status(400).send('Amount tampering detected.');
     }
 
     await prisma.rSVP.update({
