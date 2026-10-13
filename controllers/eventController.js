@@ -188,7 +188,16 @@ exports.deleteEvent = async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    if (existing._count?.rsvps > 0) {
+    // If deleting duplicate sfx-seminar, automatically migrate any registrations to imm-sfx-seminar
+    if (existing.slug === 'sfx-seminar') {
+      const primary = await prisma.event.findUnique({ where: { slug: 'imm-sfx-seminar' } });
+      if (primary) {
+        await prisma.rsvp.updateMany({
+          where: { eventId: existing.id },
+          data: { eventId: primary.id }
+        });
+      }
+    } else if (existing._count?.rsvps > 0) {
       return res.status(400).json({
         error: `Cannot delete event because it has ${existing._count.rsvps} registered participants. Deactivate the link instead, or migrate registrations first.`
       });
