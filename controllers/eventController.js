@@ -153,3 +153,32 @@ exports.toggleEventStatus = async (req, res) => {
     res.status(500).json({ error: 'Could not change event status' });
   }
 };
+
+exports.deleteEvent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const eventId = parseInt(id);
+
+    const existing = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: { _count: { select: { rsvps: true } } }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    if (existing._count?.rsvps > 0) {
+      return res.status(400).json({
+        error: `Cannot delete event because it has ${existing._count.rsvps} registered participants. Deactivate the link instead, or migrate registrations first.`
+      });
+    }
+
+    await prisma.event.delete({ where: { id: eventId } });
+    res.json({ message: 'Event deleted successfully', eventId });
+  } catch (err) {
+    console.error('Delete event error:', err);
+    res.status(500).json({ error: 'Could not delete event' });
+  }
+};
+
