@@ -76,13 +76,6 @@ async function main() {
     create: eventData,
   });
 
-  // Also seed with alternative slug 'sfx-seminar' so both URLs work seamlessly
-  await prisma.event.upsert({
-    where: { slug: "sfx-seminar" },
-    update: { ...eventData, slug: "sfx-seminar" },
-    create: { ...eventData, slug: "sfx-seminar" },
-  });
-
   console.log('Successfully seeded IMM SFX Seminar event:', JSON.stringify(event, null, 2));
 }
 
