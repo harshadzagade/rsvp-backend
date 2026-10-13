@@ -116,8 +116,28 @@ exports.updateEvent = async (req, res) => {
     if (slug !== undefined) updateData.slug = slug;
     if (date !== undefined) updateData.date = new Date(date);
     if (venue !== undefined) updateData.venue = venue;
-    if (fee !== undefined) updateData.fee = Number(fee);
-    if (feeOptions !== undefined) updateData.feeOptions = feeOptions;
+    if (fee !== undefined) {
+      const newFee = Number(fee);
+      updateData.fee = newFee;
+
+      // Keep feeOptions synchronized with updated fee
+      if (feeOptions !== undefined) {
+        updateData.feeOptions = feeOptions;
+      } else {
+        const existing = await prisma.event.findUnique({ where: { id: parseInt(id) } });
+        if (existing?.feeOptions?.options?.length) {
+          const updatedOptions = existing.feeOptions.options.map(opt => {
+            if (!opt.conditions || opt.conditions.length === 0) {
+              return { ...opt, fee: newFee };
+            }
+            return opt;
+          });
+          updateData.feeOptions = { ...existing.feeOptions, options: updatedOptions };
+        }
+      }
+    } else if (feeOptions !== undefined) {
+      updateData.feeOptions = feeOptions;
+    }
     if (formFields !== undefined) updateData.formFields = formFields;
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);
     if (institute !== undefined) updateData.institute = institute;
