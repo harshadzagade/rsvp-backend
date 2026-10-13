@@ -164,18 +164,18 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
 
   const emailSubject = credentials?.emailSubject
     ? replaceVariables(credentials.emailSubject, templateContext)
-    : `${isFree ? 'Registration Confirmed' : 'Payment Confirmed'}: ${confName}`;
+    : `Registration Acknowledgment: ${confName}`;
 
   const emailHeading = credentials?.emailHeading
     ? replaceVariables(credentials.emailHeading, templateContext)
-    : 'Registration Confirmation';
+    : 'Registration Acknowledgment';
 
   const emailBodyHtml = credentials?.emailBody
     ? `<div style="font-size: 15px; line-height: 1.6; color: #374151; margin: 16px 0;">${replaceVariables(credentials.emailBody, templateContext).replace(/\n/g, '<br/>')}</div>`
     : `
       <p style="font-size: 15px; line-height: 1.6; color: #374151;">
         Thank you for registering for the <strong>${confName}</strong>. 
-        We have successfully received your details and payment.
+        We have successfully received your registration details.
       </p>
     `;
 
@@ -185,7 +185,7 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
 
   const whatsappSection = credentials?.whatsappLink 
     ? `
-      <div style="margin: 20px 0; padding: 16px; border: 1px solid #10B981; border-radius: 12px; background: #ECFDF5; color: #065F46;">
+      <div style="margin: 20px 0; border: 1px solid #10B981; border-radius: 12px; background: #ECFDF5; color: #065F46;">
         <p style="margin: 0 0 8px; font-weight: bold; font-size: 15px;">Action Required: Join WhatsApp Group</p>
         <p style="margin: 0; font-size: 14px; line-height: 1.5;">
           ${credentials.whatsappText || 'We have received your registration. Please join the WhatsApp group by clicking on the joining link:'}
@@ -209,7 +209,7 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
       <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <div style="background: ${brandColor}; padding: 24px; text-align: center; color: white;">
           <h1 style="margin: 0; font-size: 22px; font-weight: bold; letter-spacing: 0.5px;">${fromName}</h1>
-          <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.9;">Official Event Registration Receipt</p>
+          <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.9;">Registration Acknowledgment</p>
         </div>
         
         <div style="padding: 28px; color: #1f2937;">
@@ -230,7 +230,7 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
           })}
 
           <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
-            Please preserve this email as your official confirmation for event entry and certificate issuance.
+            Please preserve this email as your official registration acknowledgment for event entry and certificate issuance.
           </p>
 
           ${emailFooterHtml}
