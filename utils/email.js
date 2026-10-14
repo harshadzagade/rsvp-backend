@@ -47,8 +47,6 @@ const ADMIN_EMAILS = [
   .map((email) => email.trim())
   .filter(Boolean);
 
-const INTERNAL_AUDIT_EMAILS = ['anirudham_ics@met.edu', 'manojkumarp_iit@met.edu', 'artig_iom@met.edu'];
-
 const formatDate = (value, credentials) => {
   const slug = String(credentials?.slug || '').toLowerCase();
   if (slug === 'iop-fdp') {
@@ -253,9 +251,6 @@ async function sendThankYouEmail({ to, name, eventTitle, eventDate, venue, amoun
   if (cleanCcList.length > 0) {
     mailOptions.cc = cleanCcList;
   }
-  if (INTERNAL_AUDIT_EMAILS.length > 0) {
-    mailOptions.bcc = INTERNAL_AUDIT_EMAILS;
-  }
 
   const info = await activeTransporter.sendMail(mailOptions);
   console.log(`[Email] sendThankYouEmail sent to "${to}", CC: [${cleanCcList.join(', ')}], ID: ${info.messageId}`);
@@ -303,9 +298,6 @@ async function sendFailureEmail({ to, name, eventTitle, eventDate, venue, formDa
   if (cleanCcList.length > 0) {
     mailOptions.cc = cleanCcList;
   }
-  if (INTERNAL_AUDIT_EMAILS.length > 0) {
-    mailOptions.bcc = INTERNAL_AUDIT_EMAILS;
-  }
 
   const info = await activeTransporter.sendMail(mailOptions);
   console.log(`[Email] sendFailureEmail sent to "${to}", CC: [${cleanCcList.join(', ')}], ID: ${info.messageId}`);
@@ -347,10 +339,6 @@ async function sendAdminNotificationEmail({ eventTitle, eventDate, venue, amount
       </div>
     `,
   };
-
-  if (INTERNAL_AUDIT_EMAILS.length > 0) {
-    mailOptions.bcc = INTERNAL_AUDIT_EMAILS;
-  }
 
   const info = await activeTransporter.sendMail(mailOptions);
   console.log(`[Email] sendAdminNotificationEmail sent to [${adminList.join(', ')}], ID: ${info.messageId}`);
