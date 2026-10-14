@@ -93,7 +93,8 @@ const buildParticipantSummary = ({ formData = {}, amount, txnid, statusLabel }) 
     'fullname', 'name', 'email', 'mobile', 'whatsappnumber', 'contactnumber', 'phone',
     'category', 'participationcategory', 'participationmode', 'paymenttype',
     'organisation', 'institutename', 'nameofinstitutecollege', 'designation',
-    'certificatename', 'joiningreason', 'txnid'
+    'certificatename', 'joiningreason', 'txnid',
+    'amountbreakdown', 'breakdown', 'feebreakdown', 'amount', 'fee', 'feeoptions'
   ]);
 
   const rows = [
@@ -109,10 +110,17 @@ const buildParticipantSummary = ({ formData = {}, amount, txnid, statusLabel }) 
   ];
 
   // Append any extra form fields dynamically (e.g. poster presentation fields)
+  // Exclude objects/arrays like amountBreakdown so they never appear in the email
   Object.entries(formData).forEach(([key, value]) => {
     const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!handledKeys.has(cleanKey) && value !== undefined && value !== null && value !== '') {
-      rows.push([normalizeLabel(key), value]);
+    if (
+      !handledKeys.has(cleanKey) &&
+      value !== undefined &&
+      value !== null &&
+      value !== '' &&
+      typeof value !== 'object'
+    ) {
+      rows.push([normalizeLabel(key), String(value)]);
     }
   });
 
