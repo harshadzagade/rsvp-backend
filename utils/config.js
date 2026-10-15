@@ -55,6 +55,8 @@ function getCredentialsForEvent(event) {
       prefix = 'PGDM';
     } else if (slug.includes('imm') || slug.includes('conference') || title.includes('imm') || title.includes('management') || slug === 'bus' || slug === 'mg-cr' || slug.includes('sfx')) {
       prefix = 'IMM';
+    } else if (slug.includes('mrv') || slug.includes('mun') || title.includes('mrv') || title.includes('mun')) {
+      prefix = 'MRV';
     }
   }
 
@@ -66,12 +68,12 @@ function getCredentialsForEvent(event) {
   const dbSetting = settingsCache.get(prefix);
 
   // Read DB values first, then prefixed env values, then fallback globals
-  const key = dbSetting?.payuKey || process.env[`${prefix}_PAYU_KEY`] || process.env.PAYU_KEY;
-  const salt = dbSetting?.payuSalt || process.env[`${prefix}_PAYU_SALT`] || process.env.PAYU_SALT;
+  const key = dbSetting?.payuKey || process.env[`${prefix}_PAYU_KEY`] || (prefix === 'MRV' ? (settingsCache.get('IMM')?.payuKey || process.env.IMM_PAYU_KEY || process.env.PAYU_KEY) : process.env.PAYU_KEY);
+  const salt = dbSetting?.payuSalt || process.env[`${prefix}_PAYU_SALT`] || (prefix === 'MRV' ? (settingsCache.get('IMM')?.payuSalt || process.env.IMM_PAYU_SALT || process.env.PAYU_SALT) : process.env.PAYU_SALT);
   const baseUrl = dbSetting?.payuBaseUrl || process.env[`${prefix}_PAYU_BASE_URL`] || process.env.PAYU_BASE_URL || 'https://secure.payu.in/_payment';
   
-  const emailUser = dbSetting?.emailUser || process.env[`${prefix}_EMAIL_USER`] || process.env.EMAIL_USER;
-  const emailPass = dbSetting?.emailPass || process.env[`${prefix}_EMAIL_PASS`] || process.env.EMAIL_PASS;
+  const emailUser = dbSetting?.emailUser || process.env[`${prefix}_EMAIL_USER`] || (prefix === 'MRV' ? (settingsCache.get('IMM')?.emailUser || process.env.IMM_EMAIL_USER || process.env.EMAIL_USER) : process.env.EMAIL_USER);
+  const emailPass = dbSetting?.emailPass || process.env[`${prefix}_EMAIL_PASS`] || (prefix === 'MRV' ? (settingsCache.get('IMM')?.emailPass || process.env.IMM_EMAIL_PASS || process.env.EMAIL_PASS) : process.env.EMAIL_PASS);
   
   // Parse CC / admin emails (handles commas, semicolons, and spaces)
   const rawAdminEmails = dbSetting?.adminEmails || process.env[`${prefix}_ADMIN_EMAILS`] || process.env.ADMIN_EMAILS || process.env[`${prefix}_ADMIN_EMAIL`] || process.env.ADMIN_EMAIL;
