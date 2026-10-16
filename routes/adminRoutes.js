@@ -18,5 +18,6 @@ router.put('/settings/:code', verifyToken, checkRole('SUPERADMIN'), adminControl
 
 // RSVPs (Protected: Token mandatory, scoped to user institute)
 router.get('/rsvps', verifyToken, adminController.getAllRSVPs);
+router.post('/rsvps/:txnid/verify', verifyToken, adminController.verifyRSVPPayment);
 
 module.exports = router;

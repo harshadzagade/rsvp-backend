@@ -198,6 +198,9 @@ exports.registerRSVP = async (req, res) => {
       }
     }
 
+    normalizedFormData.amount = amount;
+    normalizedFormData.feeAtRegistration = amount;
+
     await prisma.rSVP.create({
       data: {
         eventId,

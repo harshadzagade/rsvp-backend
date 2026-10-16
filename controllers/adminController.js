@@ -1,7 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { refreshSettingsCache, setSettingInCache, parseEmailList } = require('../utils/config');
+const { refreshSettingsCache, setSettingInCache, parseEmailList, getCredentialsForEvent } = require('../utils/config');
+const { verifyPaymentWithPayU } = require('../utils/payu');
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -248,12 +249,91 @@ exports.getAllRSVPs = async (req, res) => {
 
     const rsvps = await prisma.rSVP.findMany({
       where: whereClause,
-      include: { event: true },
+      include: { event: true, payment: true },
       orderBy: { createdAt: 'desc' }
     });
     res.json(rsvps);
   } catch (err) {
     console.error('Error fetching RSVPs:', err);
     res.status(500).json({ error: 'Could not fetch RSVP data' });
+  }
+};
+
+// Verify payment status with PayU API and sync to database
+exports.verifyRSVPPayment = async (req, res) => {
+  try {
+    const { txnid } = req.params;
+    const rsvp = await prisma.rSVP.findUnique({
+      where: { txnid },
+      include: { event: true, payment: true },
+    });
+
+    if (!rsvp) {
+      return res.status(404).json({ error: 'RSVP not found for this transaction ID' });
+    }
+
+    const credentials = getCredentialsForEvent(rsvp.event);
+    if (!credentials || !credentials.key || !credentials.salt) {
+      return res.status(400).json({ error: 'Event payment credentials are not configured' });
+    }
+
+    const verification = await verifyPaymentWithPayU({
+      key: credentials.key,
+      salt: credentials.salt,
+      txnid,
+      baseUrl: credentials.baseUrl,
+    });
+
+    const payuStatus = String(verification.verifiedStatus || '').toLowerCase();
+    const raw = verification.raw;
+    let newStatus = rsvp.status;
+
+    if (payuStatus === 'success') {
+      newStatus = 'success';
+    } else if (payuStatus === 'failure' || payuStatus === 'failed' || payuStatus === 'bounced') {
+      newStatus = payuStatus;
+    } else if (payuStatus === 'not found' || payuStatus === 'usercancelled' || payuStatus === 'dropped') {
+      newStatus = 'cancelled';
+    } else if (payuStatus) {
+      newStatus = payuStatus;
+    }
+
+    const updatedRsvp = await prisma.rSVP.update({
+      where: { txnid },
+      data: { status: newStatus },
+      include: { event: true, payment: true },
+    });
+
+    const amountVal = verification.txnDetails?.amount 
+      ? parseInt(verification.txnDetails.amount) 
+      : (rsvp.payment?.amount || rsvp.formData?.amount || rsvp.event.fee);
+
+    await prisma.payment.upsert({
+      where: { txnid },
+      update: {
+        status: newStatus,
+        amount: amountVal,
+        payuResponse: raw || {},
+      },
+      create: {
+        txnid,
+        amount: amountVal,
+        status: newStatus,
+        payuResponse: raw || {},
+      },
+    });
+
+    res.json({
+      success: true,
+      oldStatus: rsvp.status,
+      newStatus,
+      payuStatus,
+      txnDetails: verification.txnDetails,
+      rsvp: updatedRsvp,
+      message: `Status updated from ${rsvp.status} to ${newStatus}`,
+    });
+  } catch (err) {
+    console.error('Error verifying payment with PayU:', err);
+    res.status(500).json({ error: err.message || 'Failed to verify payment with PayU' });
   }
 };
