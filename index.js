@@ -9,6 +9,7 @@ const rsvpRoutes = require('./routes/rsvpRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const { initCronJobs } = require('./services/cronService');
 
 const app = express();
 
@@ -105,4 +106,7 @@ app.use('/api', uploadRoutes);
 app.use('/api/admin', adminRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+  initCronJobs();
+});
